@@ -9,7 +9,7 @@ class InventoryTab extends StatelessWidget {
       appBar: AppBar(title: const Text("Inventory")),
       body: const Center(
         child: Text(
-          "Inventory Page Running!",
+          "Inventory Page Running",
           style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
         ),
       ),
