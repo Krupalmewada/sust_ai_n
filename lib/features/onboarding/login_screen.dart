@@ -44,19 +44,21 @@ class LoginScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 24.0),
               child: Column(
                 children: [
-                  // ElevatedButton(
-                  //   onPressed: () => context.go('/name'),
-                  //   style: ElevatedButton.styleFrom(
-                  //     minimumSize: const Size(double.infinity, 50),
-                  //     backgroundColor: Colors.black,
-                  //     foregroundColor: Colors.white,
-                  //   ),
-                  //   child: const Text('Login'),
-                  // ),
+                  ElevatedButton(
+                    onPressed: (){
+                      Navigator.pushNamed(context, '/name');
+                    },
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 50),
+                      backgroundColor: Colors.black,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Login'),
+                  ),
                   const SizedBox(height: 16),
                   OutlinedButton(
-                    onPressed: () {
-                      // Add signup navigation here
+                    onPressed: (){
+                      Navigator.pushNamed(context, '/name');
                     },
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size(double.infinity, 50),
