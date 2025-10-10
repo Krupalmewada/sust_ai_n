@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+
 class InventoryTab extends StatelessWidget {
   const InventoryTab({super.key});
 
@@ -13,7 +14,11 @@ class InventoryTab extends StatelessWidget {
           style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
         ),
       ),
-      
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => Navigator.of(context).pushNamed('/scan'),
+        icon: const Icon(Icons.camera_alt),
+        label: const Text('Scan receipt'),
+      ),
     );
   }
 }
