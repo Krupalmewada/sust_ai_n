@@ -1,38 +1,65 @@
 import 'parsed_row.dart';
 
 List<ParsedRow> parseReceiptText(String rawText) {
-  final noise = <RegExp>[
-    RegExp(r'^you saved', caseSensitive: false),
-    RegExp(r'^instant savings', caseSensitive: false),
-    RegExp(r'^points|^pts?\b', caseSensitive: false),             // points
-    RegExp(r'^(subtotal|total|total tax|tender|change|cash|mastercard|visa)$',
-        caseSensitive: false),
-    RegExp(r'^number of items', caseSensitive: false),
-    // price-only lines (optionally with trailing C / HC for coupons)
-    RegExp(r'^\$?\s*\d+\s*(?:\.\s*\d{2})?\s*(?:c|hc)?\s*$', caseSensitive: false),
-    // e.g., "80 pts"
-    RegExp(r'^\d+\s*pts?$', caseSensitive: false),
-  ];
-
-
-  final lines = rawText
+  // ---------- 1) Split into lines ----------
+  final allLines = rawText
       .split('\n')
       .map((l) => l.trim())
       .where((l) => l.isNotEmpty)
       .toList();
 
+  // ---------- 2) Heuristics to detect items region ----------
+  final priceToken   = RegExp(r'\$\s*\d+(?:\s*\.\s*\d{2})?\s*(?:c|hc)?\s*$', caseSensitive: false);
+  final weightedToken= RegExp(r'\b(?:kg|g|lb|lbs|oz|l|ml)\b.*@\s*\$\s*\d', caseSensitive: false);
+  final multiToken   = RegExp(r'\d+\s*@\s*1\s*/\s*\$\s*\d|\d+\s*x\s*\$\s*\d', caseSensitive: false);
+
+  bool looksLikeItem(int i) {
+    final l = allLines[i];
+    final next = (i + 1 < allLines.length) ? allLines[i + 1] : '';
+    return priceToken.hasMatch(l) ||
+        weightedToken.hasMatch(l) ||
+        multiToken.hasMatch(l) ||
+        priceToken.hasMatch(next) || weightedToken.hasMatch(next) || multiToken.hasMatch(next);
+  }
+
+  int start = 0;
+  for (int i = 0; i < allLines.length; i++) {
+    if (looksLikeItem(i)) { start = i; break; }
+  }
+
+  final footerGuard = RegExp(
+    r'^(subtotal|total|total tax|tax|tender|change|cash|debit|credit|visa|mastercard|number of items)\b',
+    caseSensitive: false,
+  );
+  int end = allLines.length;
+  for (int j = start + 1; j < allLines.length; j++) {
+    if (footerGuard.hasMatch(allLines[j])) { end = j; break; }
+  }
+
+  final region = allLines.sublist(start, end);
+
+  // ---------- 3) Noise filters ----------
+  final noise = <RegExp>[
+    RegExp(r'^you saved', caseSensitive: false),
+    RegExp(r'^instant savings', caseSensitive: false),
+    RegExp(r'^(points|pts?)\b', caseSensitive: false),
+    RegExp(r'^number of items', caseSensitive: false),
+    RegExp(r'^\$?\s*\d+(?:\s*\.\s*\d{2})?\s*(?:c|hc)?\s*$', caseSensitive: false), // price-only
+  ];
+
   final filtered = <String>[];
-  for (final l in lines) {
+  for (final l in region) {
     if (noise.any((rx) => rx.hasMatch(l))) continue;
     filtered.add(l);
   }
 
+  // ---------- 4) Merge detail lines with names ----------
   bool isDetail(String s) =>
       s.contains(RegExp(r'\bkg\b|\blb\b|\boz\b|\bl\b|\bml\b', caseSensitive: false)) ||
           s.contains('@') ||
           RegExp(r'^\d+\s*@').hasMatch(s) ||
           RegExp(r'\d+\s*x\s*\$').hasMatch(s) ||
-          RegExp(r'\$\d+(\.\d{2})?$').hasMatch(s);
+          RegExp(r'\$\s*\d+(?:\s*\.\s*\d{2})?(?:\s*(?:c|hc))?\s*$').hasMatch(s); // <— tolerant price
 
   final merged = <String>[];
   for (int i = 0; i < filtered.length; i++) {
@@ -44,6 +71,7 @@ List<ParsedRow> parseReceiptText(String rawText) {
     }
   }
 
+  // ---------- 5) Patterns ----------
   final weightedRx = RegExp(
       r'(\d+(?:\.\d+)?)\s*(kg|g|lb|lbs|oz|l|ml)\s*@\s*\$(\d+(?:\.\d{2}))\s*/\s*(kg|g|lb|lbs|oz|l|ml)',
       caseSensitive: false);
@@ -52,80 +80,64 @@ List<ParsedRow> parseReceiptText(String rawText) {
       r'(\d+)\s*@\s*1\s*/\s*\$(\d+(?:\.\d{2}))|(\d+)\s*x\s*\$(\d+(?:\.\d{2}))',
       caseSensitive: false);
 
-  final trailingPriceRx = RegExp(r'\$\s*(\d+(?:\s*\.\s*\d{2}))\s*(?:c|hc)?\s*$',
-      caseSensitive: false);
+  final trailingPriceRx =
+  RegExp(r'\$\s*(\d+(?:\s*\.\s*\d{2}))\s*(?:c|hc)?\s*$', caseSensitive: false);
 
+  // ---------- helpers ----------
+  double? n(String? x) {                     // <— keep ONE n()
+    if (x == null) return null;
+    final cleaned = x.replaceAll(' ', '');
+    return double.tryParse(cleaned);
+  }
 
   String normalizeName(String s) {
     s = s.toLowerCase();
 
-    // 1) quick char-level OCR fixes
-    const subs = {
-      '0': 'o',
-      '1': 'l',
-      '5': 's',
-      '8': 'b',
-    };
+    // quick OCR char fixes
+    const subs = {'0': 'o','1': 'l','5': 's','8': 'b'};
     subs.forEach((k, v) => s = s.replaceAll(k, v));
 
-    // remove stray punctuation that often appears mid-word
     s = s.replaceAll(RegExp(r'[·••º°]'), '');
     s = s.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
 
-    // 2) try to join accidentally split words using a small grocery dictionary
+    // join split words using a tiny dictionary
     final dict = <String>{
-      // keep small; we can move this to assets later
       'onions','strawberries','broccoli','asparagus','clubhouse','bagel','bananas',
       'parmesan','ginger','lettuce','pepper','kiwi','garlic','chips','dressed','rye',
     };
-
-    // join two-token splits if their concat is a dictionary word
     final tokens = s.split(' ');
     for (int i = 0; i < tokens.length - 1; i++) {
       final joined = (tokens[i] + tokens[i + 1]);
       if (dict.contains(joined)) {
         tokens[i] = joined;
         tokens.removeAt(i + 1);
-        i--; // re-check position after merge
+        i--;
       }
     }
     s = tokens.join(' ');
 
-    // 3) simple plural → singular (very light)
+    // simple plural → singular
     s = s.replaceAll(RegExp(r'\bpeppers\b'), 'pepper');
     s = s.replaceAll(RegExp(r'\btomatoes\b'), 'tomato');
     s = s.replaceAll(RegExp(r'\bbagels\b'), 'bagel');
 
-    // 4) cleanup digits/SKUs & extra spaces
+    // strip long SKUs & extra spaces
     s = s.replaceAll(RegExp(r'\b\d{5,}\b'), '').trim();
     s = s.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
-
     return s;
   }
 
-
-
   String normUnit(String u) => u.toLowerCase() == 'lbs' ? 'lb' : u.toLowerCase();
-  double? n(String? x) {
-    if (x == null) return null;
-    final cleaned = x.replaceAll(' ', '');
-    return double.tryParse(cleaned);
-  }
 
-
+  // ---------- 6) Build rows ----------
   final out = <ParsedRow>[];
 
   for (final block in merged) {
     final parts = block.split('\n');
     final nameLine = parts.first.trim();
-
     if (trailingPriceRx.hasMatch(nameLine) && nameLine.split(' ').length == 1) continue;
 
-    final row = ParsedRow(
-      name: normalizeName(nameLine),
-      raw: block,
-    );
-
+    final row = ParsedRow(name: normalizeName(nameLine), raw: block);
     bool matched = false;
 
     final w = weightedRx.firstMatch(block);
@@ -150,8 +162,9 @@ List<ParsedRow> parseReceiptText(String rawText) {
         row.qty = (qty ?? 1).toDouble();
         row.unit = 'pcs';
         row.unitPrice = priceEach;
-        row.lineTotal =
-        (qty != null && priceEach != null) ? double.parse((qty * priceEach).toStringAsFixed(2)) : priceEach;
+        row.lineTotal = (qty != null && priceEach != null)
+            ? double.parse((qty * priceEach).toStringAsFixed(2))
+            : priceEach;
         matched = true;
       }
     }
