@@ -282,7 +282,7 @@ class InventoryTab extends StatelessWidget {
   }
 }
 
-// ------------------- COMPONENTS -------------------
+// ------------------- COMPONENTS ------------------
 
 
 class _CategoryTile extends StatelessWidget {
