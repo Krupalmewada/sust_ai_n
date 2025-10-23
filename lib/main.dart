@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'features/home/inventory/inventory_tab.dart';
 import 'features/ocr_scan/presentation/pages/scan_page.dart';
+import 'features/account/pages/account_page.dart';
 
 void main() {
   runApp(const MyApp());
