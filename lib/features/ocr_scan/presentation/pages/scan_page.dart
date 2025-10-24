@@ -114,7 +114,8 @@ class _ScanPageState extends State<ScanPage> with SingleTickerProviderStateMixin
   final _products = ProductLookupService();
   final _picker = ImagePicker();
   // NOTE: move to secure storage / env in production.
-  static const String _visionApiKey = 'AIzaSyBZCJKX9X4YJ2taycS8cJQ6Bfz2AKwHwAY';
+  static const String _visionApiKey =
+  String.fromEnvironment('VISION_API_KEY', defaultValue: '');
   late final CloudVisionService _vision = CloudVisionService(apiKey: _visionApiKey);
 
 
