@@ -14,7 +14,6 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../ocr_scan/domain/detector_service.dart';
-import '../../../ocr_scan/domain/detection_result.dart';
 import '../../../ocr_scan/domain/parse_receipt_text.dart';
 import '../../../ocr_scan/domain/parsed_row.dart';
 import '../../../ocr_scan/domain/product_lookup_service.dart';
@@ -23,7 +22,6 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'dart:typed_data';
 import 'package:image/image.dart' as img;
 
-import 'package:http/http.dart' as http; // for CloudVisionService dependency
 import '../../../ocr_scan/domain/cloud_vision_service.dart';
 
 
@@ -124,6 +122,7 @@ class _ScanPageState extends State<ScanPage> with SingleTickerProviderStateMixin
   TextRecognizer(script: TextRecognitionScript.latin);
 
   // Product details (barcode mode)
+  // ignore: unused_field
   ProductInfo? _product;
 
   @override
@@ -573,11 +572,11 @@ class _ScanPageState extends State<ScanPage> with SingleTickerProviderStateMixin
         child: Container(
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(.30),
+            color: Colors.black.withValues(alpha: .30),
             borderRadius: BorderRadius.circular(28),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.15),
+                color: Colors.black.withValues(alpha: 0.15),
                 blurRadius: 12,
                 offset: const Offset(0, 2),
               )
@@ -707,12 +706,12 @@ class _ScanPageState extends State<ScanPage> with SingleTickerProviderStateMixin
       ),
     );
   }
-
+  // ignore: unused_element - might come in handy
   String _formatSubtitle(ParsedRow r) {
     final qty = r.qty.toStringAsFixed(r.qty.truncateToDouble() == r.qty ? 0 : 2);
     final up  = r.unitPrice != null ? '@ \$${r.unitPrice!.toStringAsFixed(2)}' : '';
     final lt  = r.lineTotal != null ? ' ⇒ \$${r.lineTotal!.toStringAsFixed(2)}' : '';
-    return '${qty} ${r.unit}  $up  $lt'.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return '$qty ${r.unit}  $up  $lt'.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 }
 
@@ -766,11 +765,11 @@ class _RoundButton extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(.92),
+              color: Colors.white.withValues(alpha: .92),
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.12),
+                  color: Colors.black.withValues(alpha: 0.12),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -848,12 +847,12 @@ class _FinderPainter extends CustomPainter {
     final glow = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 6
-      ..color = Colors.black.withOpacity(0.25);
+      ..color = Colors.black.withValues(alpha: 0.25);
 
     final stroke = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3
-      ..color = Colors.white.withOpacity(0.95);
+      ..color = Colors.white.withValues(alpha: 0.95);
 
     canvas.drawRRect(rrect, glow);
     canvas.drawRRect(rrect, stroke);
@@ -891,6 +890,7 @@ class _FinderPainter extends CustomPainter {
   bool shouldRepaint(covariant _FinderPainter old) => old.mode != mode;
 }
 
+// ignore: unused_element
 class _ProductCard extends StatelessWidget {
   final ProductInfo info;
   final VoidCallback onAdd;
