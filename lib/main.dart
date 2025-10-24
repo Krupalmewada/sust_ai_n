@@ -22,7 +22,7 @@ class MyApp extends StatelessWidget {
       initialRoute: '/inventory',
       routes: {
         '/inventory': (context) => const InventoryTab(),
-        '/recipes': (context) => const RecipesPage(),
+        '/recipes': (context) => const RecipesPage(inventoryItems: []),
         '/categories': (context) => const CategoriesPage(),
       },
     );

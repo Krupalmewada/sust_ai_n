@@ -1,11 +1,81 @@
 import 'package:flutter/material.dart';
-
+import '../../../services/spoonacular_service.dart'; // 👈 use your existing service
 import '../../../widgets/bottom_nav_bar.dart';
 import '../../../widgets/inventory_tab_selector.dart';
 
+class RecipesPage extends StatefulWidget {
+  final List<String> inventoryItems;
 
-class RecipesPage extends StatelessWidget {
-  const RecipesPage({super.key});
+  const RecipesPage({super.key, required this.inventoryItems});
+
+  @override
+  State<RecipesPage> createState() => _RecipesPageState();
+}
+
+class _RecipesPageState extends State<RecipesPage> {
+  final TextEditingController _searchController = TextEditingController();
+  bool _isLoading = false;
+  List<Map<String, dynamic>> _recipes = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchRecipes(widget.inventoryItems);
+  }
+
+  Future<void> _fetchRecipes(List<String> ingredients) async {
+    if (ingredients.isEmpty) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final recipes =
+      await SpoonacularService.getRecipesFromIngredients(ingredients);
+
+      // Fetch portion + calorie info for each recipe
+      final detailedRecipes = await Future.wait(
+        recipes.map((r) async {
+          try {
+            final details = await SpoonacularService.getRecipeDetails(r['id']);
+            return {
+              ...r,
+              'servings': details['servings'],
+              'calories': details['calories'],
+            };
+          } catch (e) {
+            print('⚠️ Skipping details for ${r['title']}: $e');
+            return {
+              ...r,
+              'servings': 'N/A',
+              'calories': 'N/A',
+            };
+          }
+        }),
+      );
+
+      setState(() {
+        _recipes = detailedRecipes;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('❌ Error: $e');
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to fetch recipes')),
+      );
+    }
+  }
+
+
+
+  Future<void> _onSearch() async {
+    final query = _searchController.text.trim();
+    final ingredients = [...widget.inventoryItems];
+    if (query.isNotEmpty) {
+      ingredients.add(query);
+    }
+    await _fetchRecipes(ingredients);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -50,11 +120,20 @@ class RecipesPage extends StatelessWidget {
                 children: [
                   const Icon(Icons.search, color: Colors.grey),
                   SizedBox(width: width * 0.02),
-                  const Expanded(
-                    child: Text(
-                      "Search for items",
-                      style: TextStyle(color: Colors.grey),
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: const InputDecoration(
+                        hintText: "Add ingredient to refine search",
+                        border: InputBorder.none,
+                        hintStyle: TextStyle(color: Colors.grey),
+                      ),
+                      onSubmitted: (_) => _onSearch(),
                     ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.send, color: Colors.green),
+                    onPressed: _onSearch,
                   ),
                 ],
               ),
@@ -63,7 +142,7 @@ class RecipesPage extends StatelessWidget {
             SizedBox(height: height * 0.03),
 
             const Text(
-              "Recent",
+              "Suggested Recipes",
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -72,9 +151,8 @@ class RecipesPage extends StatelessWidget {
 
             SizedBox(height: height * 0.015),
 
-            // Category Tabs
             InventoryTabSelector(
-              selectedIndex: 2, // Recipes selected
+              selectedIndex: 2,
               onTabSelected: (index) {
                 if (index == 0) {
                   Navigator.pushNamed(context, '/categories');
@@ -84,54 +162,37 @@ class RecipesPage extends StatelessWidget {
               },
             ),
 
-
-
             SizedBox(height: height * 0.02),
 
-            // 📋 Recipe list
             Expanded(
-              child: ListView(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _recipes.isEmpty
+                  ? const Center(child: Text("No recipes found"))
+                  : ListView.builder(
                 physics: const BouncingScrollPhysics(),
-                children: const [
-                  _RecipeItem(
-                    image: "🍲",
-                    title: "Stir-fry chicken",
-                    subtitle: "Dinner / 20 mins",
-                    bgColor: Color(0xFFFFF6E5),
-                  ),
-                  _RecipeItem(
-                    image: "🍜",
-                    title: "Ramen",
-                    subtitle: "Lunch / 15 mins",
-                    bgColor: Color(0xFFEDEBFF),
-                  ),
-                  _RecipeItem(
-                    image: "🥗",
-                    title: "Salmon salad",
-                    subtitle: "Lunch / 15 mins",
-                    bgColor: Color(0xFFFFEFE9),
-                  ),
-                  _RecipeItem(
-                    image: "🍳",
-                    title: "Tropical fruit salad",
-                    subtitle: "Breakfast / 15 mins",
-                    bgColor: Color(0xFFE8F6FF),
-                  ),
-                ],
+                itemCount: _recipes.length,
+                itemBuilder: (context, index) {
+                  final recipe = _recipes[index];
+                  return _RecipeItem(
+                    imageUrl: recipe['image'],
+                    title: recipe['title'],
+                    subtitle:
+                    "${recipe['servings'] ?? 'N/A'} servings • ${recipe['calories'] ?? 'N/A'} kcal",
+                    bgColor: const Color(0xFFF5F5F5),
+                  );
+                },
               ),
             ),
           ],
         ),
       ),
 
-      // Common bottom nav bar
       bottomNavigationBar: BottomNavBar(
-        currentIndex: 1, // Recipe tab
+        currentIndex: 1,
         onTap: (index) {
           if (index == 0) {
             Navigator.pushNamed(context, '/inventory');
-          } else if (index == 1) {
-            // Already on Recipes
           } else if (index == 3) {
             Navigator.pushNamed(context, '/profile');
           }
@@ -144,13 +205,13 @@ class RecipesPage extends StatelessWidget {
 // ------------------ COMPONENT ------------------
 
 class _RecipeItem extends StatelessWidget {
-  final String image;
+  final String imageUrl;
   final String title;
   final String subtitle;
   final Color bgColor;
 
   const _RecipeItem({
-    required this.image,
+    required this.imageUrl,
     required this.title,
     required this.subtitle,
     required this.bgColor,
@@ -170,9 +231,10 @@ class _RecipeItem extends StatelessWidget {
             decoration: BoxDecoration(
               color: bgColor,
               borderRadius: BorderRadius.circular(12),
-            ),
-            child: Center(
-              child: Text(image, style: TextStyle(fontSize: width * 0.08)),
+              image: DecorationImage(
+                image: NetworkImage(imageUrl),
+                fit: BoxFit.cover,
+              ),
             ),
           ),
           SizedBox(width: width * 0.04),
@@ -192,7 +254,8 @@ class _RecipeItem extends StatelessWidget {
               ],
             ),
           ),
-          const Icon(Icons.arrow_forward_ios_rounded, color: Colors.black54, size: 18),
+          const Icon(Icons.arrow_forward_ios_rounded,
+              color: Colors.black54, size: 18),
         ],
       ),
     );
