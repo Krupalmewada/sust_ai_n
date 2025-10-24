@@ -87,7 +87,7 @@ class ProductLookupService {
     final cfg = ProductQueryConfiguration(
       code,
       language: OpenFoodFactsLanguage.ENGLISH,
-      version: ProductQueryVersion.v2,
+      version: ProductQueryVersion.v3,
       fields: <ProductField>[
         ProductField.BARCODE,
         ProductField.NAME,
@@ -99,7 +99,7 @@ class ProductLookupService {
     );
 
     try {
-      final res = await OpenFoodAPIClient.getProduct(cfg);
+      final res = await OpenFoodAPIClient.getProductV3(cfg);
       final p = res.product;
       if (p == null) return null;
 
