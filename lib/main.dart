@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sust_ai_n/features/ocr_scan/presentation/pages/scan_page.dart';
 import 'features/home/inventory/inventory_tab.dart';
 import 'features/home/receipe/categories_page.dart';
 import 'features/home/receipe/recipes_page.dart';
@@ -24,6 +25,7 @@ class MyApp extends StatelessWidget {
         '/inventory': (context) => const InventoryTab(),
         '/recipes': (context) => const RecipesPage(inventoryItems: []),
         '/categories': (context) => const CategoriesPage(),
+        '/scan' :(context)=> const ScanPage(),
       },
     );
   }

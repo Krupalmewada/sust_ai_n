@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../features/ocr_scan/presentation/pages/scan_page.dart';
+
 class BottomNavBar extends StatelessWidget {
   final int currentIndex;
   final Function(int) onTap;
@@ -94,17 +96,26 @@ class _ScannerIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 56,
-      height: 56,
-      decoration: const BoxDecoration(
-        color: Color(0xFF23C483),
-        shape: BoxShape.circle,
-      ),
-      child: const Icon(
-        Icons.center_focus_strong,
-        color: Colors.white,
-        size: 30,
+    return InkWell(
+      borderRadius: BorderRadius.circular(100),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const ScanPage()),
+        );
+      },
+      child: Container(
+        width: 56,
+        height: 56,
+        decoration: const BoxDecoration(
+          color: Color(0xFF23C483),
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(
+          Icons.center_focus_strong,
+          color: Colors.white,
+          size: 30,
+        ),
       ),
     );
   }

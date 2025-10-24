@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 
 class SpoonacularService {
   static const String _baseUrl = 'https://api.spoonacular.com';
-  static const String _apiKey = '80c1041e2fb84b6389d2ba69fa7c1f3f';
+  static const String _apiKey = '**';
 
   /// Fetch recipes from ingredients list
   static Future<List<Map<String, dynamic>>> getRecipesFromIngredients(
