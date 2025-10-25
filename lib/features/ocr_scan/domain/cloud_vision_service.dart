@@ -1,4 +1,3 @@
-// lib/app/features/ocr_scan/domain/cloud_vision_service.dart
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
