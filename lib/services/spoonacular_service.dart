@@ -1,17 +1,16 @@
 import 'dart:convert';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 class SpoonacularService {
   static const String _baseUrl = 'https://api.spoonacular.com';
-  static final String? _apiKey = dotenv.env['SpoonacularapiKey'];
+  static const String _apiKey = '**';
 
   /// Fetch recipes from ingredients list
   static Future<List<Map<String, dynamic>>> getRecipesFromIngredients(
       List<String> ingredients) async {
     final ingredientString = ingredients.join(',');
     final url =
-        '$_baseUrl/recipes/findByIngredients?ingredients=$ingredientString&number=10&apiKey=$_apiKey';
+        '$_baseUrl/recipes/findByIngredients?ingredients=$ingredientString&number=5&apiKey=$_apiKey';
 
     final response = await http.get(Uri.parse(url));
 
