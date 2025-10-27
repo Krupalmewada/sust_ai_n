@@ -21,13 +21,10 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 
 import '../../domain/image_preprocess.dart';
 import '../../domain/cloud_vision_service.dart';
-import '../../domain/detector_service.dart';
-import '../../domain/detection_result.dart';
 import '../../domain/parse_receipt_text.dart'; // contains parseReceiptText + parseNoteText
 import '../../domain/parsed_row.dart';
-import '../../domain/product_lookup_service.dart';
 
-enum ScanMode { receipt, note, barcode, text }
+enum ScanMode { receipt, note, text }
 
 /// Read your Google Vision API key from --dart-define.
 const String _visionApiKey =
@@ -45,12 +42,10 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
   bool _flashOn = false;
   ScanMode _mode = ScanMode.receipt;
 
-  XFile? _lastShot;
+
 
   // Services
   final _vision = CloudVisionService(apiKey: _visionApiKey);
-  final _detector = DetectorService();
-  final _products = ProductLookupService();
 
   @override
   void initState() {
@@ -63,7 +58,6 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _cam?.dispose();
-    _detector.dispose();
     super.dispose();
   }
 
@@ -120,7 +114,7 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
     try {
       final shot = await cam.takePicture();
       if (!mounted) return;
-      setState(() => _lastShot = shot);
+
       _openResultSheet(imageFile: File(shot.path));
     } catch (_) {}
   }
@@ -129,7 +123,6 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
     final picker = ImagePicker();
     final img = await picker.pickImage(source: ImageSource.gallery, imageQuality: 92);
     if (img == null || !mounted) return;
-    setState(() => _lastShot = img);
     _openResultSheet(imageFile: File(img.path));
   }
 
@@ -160,8 +153,6 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
         imageFile: imageFile,
         mode: _mode,
         vision: _vision,
-        detector: _detector,
-        products: _products,
       ),
     );
   }
@@ -237,12 +228,6 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
                   onTap: () => setState(() => _mode = ScanMode.note),
                 ),
                 _ModeIcon(
-                  icon: Icons.qr_code_scanner_rounded,
-                  selected: _mode == ScanMode.barcode,
-                  tooltip: 'Barcode',
-                  onTap: () => setState(() => _mode = ScanMode.barcode),
-                ),
-                _ModeIcon(
                   icon: Icons.subject_rounded,
                   selected: _mode == ScanMode.text,
                   tooltip: 'Text',
@@ -284,7 +269,7 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
                     color: Colors.white,
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: Colors.black.withOpacity(0.10),
+                      color: Colors.black.withValues(alpha: 0.10),
                       width: 2,
                     ),
                   ),
@@ -310,15 +295,11 @@ class _ResultSheet extends StatefulWidget {
     required this.imageFile,
     required this.mode,
     required this.vision,
-    required this.detector,
-    required this.products,
   });
 
   final File imageFile;
   final ScanMode mode;
   final CloudVisionService vision;
-  final DetectorService detector;
-  final ProductLookupService products;
 
   @override
   State<_ResultSheet> createState() => _ResultSheetState();
@@ -418,41 +399,6 @@ class _ResultSheetState extends State<_ResultSheet>
         return _ParsedBundle(rawText: text, lines: lines, items: rows);
       }
 
-      case ScanMode.barcode: {
-        // Barcode first; if found, look up product; else OCR note fallback
-        final det = await widget.detector.detectFromFile(path);
-        if (det.type == DetectedType.barcode && det.barcode != null) {
-          final info = await widget.products.fetchByBarcode(det.barcode!);
-          final name = info?.name ?? info?.brand ?? det.barcode!;
-          // Extract qty/unit if OFF string has it; default pcs:1
-          final m = RegExp(r'(\d+(?:\.\d+)?)\s*(kg|g|lb|oz|l|ml)', caseSensitive: false)
-              .firstMatch(info?.quantity ?? '');
-          final qty = m != null
-              ? double.tryParse(m.group(1)!.replaceAll(',', '.')) ?? 1.0
-              : 1.0;
-          final unit = (m?.group(2)?.toLowerCase() ?? 'pcs');
-
-          final item = ParsedRow(name: name ?? det.barcode!, qty: qty, unit: unit);
-          return _ParsedBundle(
-            rawText:
-            'Barcode: ${det.barcode}\nSymbology: ${det.symbology}\nName: ${info?.name ?? '-'}\nBrand: ${info?.brand ?? '-'}\nQuantity: ${info?.quantity ?? '-'}',
-            lines: <String>[
-              'code: ${det.barcode}',
-              if (info?.name != null) 'name: ${info!.name}',
-              if (info?.brand != null) 'brand: ${info!.brand}',
-              if (info?.quantity != null) 'qty: ${info!.quantity}',
-            ],
-            items: [item],
-          );
-        }
-
-        // No barcode → try OCR as a note fallback.
-        final text2 = await _ocrLocal(path);
-        final rows2 = parseNoteText(text2);
-        final lines2 = rows2.map((r) => '${r.name} ${r.qty} ${r.unit}').toList();
-        return _ParsedBundle(rawText: text2, lines: lines2, items: rows2);
-      }
-
       case ScanMode.text:
       // Not used here; handled by manual composer sheet.
         return _ParsedBundle(rawText: '', lines: const [], items: const []);
@@ -473,7 +419,7 @@ class _ResultSheetState extends State<_ResultSheet>
               width: 40,
               height: 5,
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.12),
+                color: Colors.black.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(100),
               ),
             ),
@@ -545,7 +491,7 @@ class _ResultSheetState extends State<_ResultSheet>
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: Colors.black.withOpacity(0.06)),
+              side: BorderSide(color: Colors.black.withValues(alpha: 0.06)),
             ),
             child: Padding(
               padding: const EdgeInsets.all(12),
@@ -671,7 +617,7 @@ class _ManualTextSheetState extends State<_ManualTextSheet> {
                 width: 40,
                 height: 5,
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.12),
+                  color: Colors.black.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(100),
                 ),
               ),
@@ -737,7 +683,7 @@ class _ManualTextSheetState extends State<_ManualTextSheet> {
                                   borderRadius: BorderRadius.circular(16),
                                   side: BorderSide(
                                       color:
-                                      Colors.black.withOpacity(0.06)),
+                                      Colors.black.withValues(alpha: 0.06)),
                                 ),
                                 child: Padding(
                                   padding: const EdgeInsets.all(12),
@@ -855,9 +801,9 @@ class _Glass extends StatelessWidget {
         child: Container(
           padding: padding,
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.35),
+            color: Colors.black.withValues(alpha: 0.35),
             borderRadius: BorderRadius.circular(radius),
-            border: Border.all(color: Colors.white.withOpacity(0.10)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
           ),
           child: child,
         ),
@@ -882,8 +828,8 @@ class _ModeIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bg = selected
-        ? Colors.white.withOpacity(0.92)
-        : Colors.white.withOpacity(0.10);
+        ? Colors.white.withValues(alpha: 0.92)
+        : Colors.white.withValues(alpha: 0.10);
     final fg = selected ? Colors.black87 : Colors.white;
 
     return Tooltip(
