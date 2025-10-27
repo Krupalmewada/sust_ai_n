@@ -2,7 +2,6 @@
 // It returns a list of ParsedRow that your EditItems sheet already consumes.
 
 import 'dart:math';
-import 'package:collection/collection.dart';
 import 'parsed_row.dart'; // <-- uses your existing model
 
 /// If your ParsedRow has different field names or a copyWith, adjust below.
