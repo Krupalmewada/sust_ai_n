@@ -2,7 +2,6 @@
 // It returns a list of ParsedRow that your EditItems sheet already consumes.
 
 import 'dart:math';
-import 'package:collection/collection.dart';
 import 'parsed_row.dart'; // <-- uses your existing model
 
 /// If your ParsedRow has different field names or a copyWith, adjust below.
@@ -28,9 +27,9 @@ String _tidy(String s) {
 /// Remove money and pricing fragments to keep only product tokens.
 String _stripPrices(String s) {
   var out = s;
-  out = out.replaceAll(RegExp(r'(\$|£|€)\s*\d+[.,]?\d*'), '');        // $ 4.99
+  out = out.replaceAll(RegExp(r'[$£€]\s*\d+(?:[.,]\d+)?'), '');        // $ 4.99
   out = out.replaceAll(RegExp(r'\b\d+[.,]\d{2}\b'), '');             // 12.34
-  out = out.replaceAll(RegExp(r'\b\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{2})\b'), ''); // 1,234.56
+  out = out.replaceAll(RegExp(r'\b\d{1,3}(?:[.,]\d{3})+[.,]\d{2}\b'), ''); // 1,234.56
   out = out.replaceAll(RegExp(r'\b@[^\n]+'), '');                    // @ $/lb
   out = out.replaceAll(RegExp(r'\b[A-Z]\b$'), '');                   // trailing flags “F”
   return out;
@@ -49,7 +48,7 @@ bool _looksLikeItem(String line) {
 
 /// qty + unit patterns we will detect
 final _unitRe = RegExp(
-  r'(?<![A-Za-z0-9])(?:(\d+(?:[.,]\d+)?))\s*(kg|g|lb|oz|l|ml|pcs?|pack|pk|dozen|dz|bag|ct|count)\b',
+  r'(?<![A-Za-z0-9])\d+(?:[.,]\d+)?\s*(?:kg|g|lb|oz|l|ml|pcs?|pack|pk|dozen|dz|bag|ct|count)\b',
   caseSensitive: false,
 );
 
