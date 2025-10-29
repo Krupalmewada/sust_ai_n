@@ -1,10 +1,8 @@
 // lib/features/ocr_scan/presentation/pages/scan_page.dart
 //
-// Full-screen camera UI + real OCR wiring to your domain layer:
-//
+// Full-screen camera UI + OCR wiring:
 // Receipt  -> preprocessForOcr -> CloudVision (if key) -> fallback ML Kit -> parseReceiptText
-// Note     -> light preprocess  -> CloudVision (if key) -> fallback ML Kit -> parseNoteText
-// Barcode  -> ML Kit barcode -> OpenFoodFacts -> single ParsedRow
+// Grocery  -> light preprocess  -> CloudVision (if key) -> fallback ML Kit -> parseNoteText
 // Text     -> manual composer -> parseNoteText
 //
 // Requires --dart-define=VISION_API_KEY=YOUR_KEY when running.
@@ -24,7 +22,7 @@ import '../../domain/cloud_vision_service.dart';
 import '../../domain/parse_receipt_text.dart'; // contains parseReceiptText + parseNoteText
 import '../../domain/parsed_row.dart';
 
-enum ScanMode { receipt, note, text }
+enum ScanMode { receipt, groceryList, text }
 
 /// Read your Google Vision API key from --dart-define.
 const String _visionApiKey =
@@ -41,8 +39,6 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
   bool _initializing = true;
   bool _flashOn = false;
   ScanMode _mode = ScanMode.receipt;
-
-
 
   // Services
   final _vision = CloudVisionService(apiKey: _visionApiKey);
@@ -121,7 +117,8 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
 
   Future<void> _onPickFromGallery() async {
     final picker = ImagePicker();
-    final img = await picker.pickImage(source: ImageSource.gallery, imageQuality: 92);
+    final img =
+    await picker.pickImage(source: ImageSource.gallery, imageQuality: 92);
     if (img == null || !mounted) return;
     _openResultSheet(imageFile: File(img.path));
   }
@@ -166,7 +163,7 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
         fit: StackFit.expand,
         children: [
           _buildCoverCamera(),
-          Positioned(top: 8, left: 0, right: 0, child: _buildTopIcons()),
+          Positioned(top: 8, left: 0, right: 0, child: _buildTopRibbon()),
           Positioned(bottom: 0, left: 0, right: 0, child: _buildBottomBar()),
         ],
       ),
@@ -199,41 +196,45 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildTopIcons() {
+  // --- NEW: labeled segmented ribbon ----------------------------------------
+  Widget _buildTopRibbon() {
     return SafeArea(
       bottom: false,
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 600),
+          constraints: const BoxConstraints(maxWidth: 640),
           child: _Glass(
             blur: 14,
             radius: 24,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            child: Wrap(
-              alignment: WrapAlignment.center,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 10,
-              runSpacing: 6,
-              children: [
-                _ModeIcon(
-                  icon: Icons.receipt_long_rounded,
-                  selected: _mode == ScanMode.receipt,
-                  tooltip: 'Receipt',
-                  onTap: () => setState(() => _mode = ScanMode.receipt),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: SegmentedButton<ScanMode>(
+              segments: <ButtonSegment<ScanMode>>[
+                const ButtonSegment<ScanMode>(
+                  value: ScanMode.receipt,
+                  icon: Icon(Icons.receipt_long),
+                  label: Text('Receipt'),
                 ),
-                _ModeIcon(
-                  icon: Icons.edit_note_rounded,
-                  selected: _mode == ScanMode.note,
-                  tooltip: 'Note',
-                  onTap: () => setState(() => _mode = ScanMode.note),
+                const ButtonSegment<ScanMode>(
+                  value: ScanMode.groceryList,
+                  // If your SDK doesn't have Icons.checklist, use playlist_add_check:
+                  icon: Icon(Icons.checklist), // or: Icon(Icons.playlist_add_check)
+                  label: Text('Grocery list'),
                 ),
-                _ModeIcon(
-                  icon: Icons.subject_rounded,
-                  selected: _mode == ScanMode.text,
-                  tooltip: 'Text',
-                  onTap: () => setState(() => _mode = ScanMode.text),
+                const ButtonSegment<ScanMode>(
+                  value: ScanMode.text,
+                  icon: Icon(Icons.edit_note),
+                  label: Text('Text'),
                 ),
               ],
+              selected: <ScanMode>{_mode},
+              onSelectionChanged: (set) {
+                setState(() => _mode = set.first);
+              },
+              multiSelectionEnabled: false,
+              showSelectedIcon: false,
+              style: const ButtonStyle(
+                visualDensity: VisualDensity.compact,
+              ),
             ),
           ),
         ),
@@ -277,7 +278,8 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
               ),
             ),
             _GlassButton(
-              icon: _flashOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
+              icon:
+              _flashOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
               label: _flashOn ? 'Flash' : 'No flash',
               onTap: _toggleFlash,
             ),
@@ -312,7 +314,7 @@ class _ParsedBundle {
     required this.items,
   });
   final String rawText;
-  final List<String> lines;    // for the "Parsed" tab (human-readable)
+  final List<String> lines; // for the "Parsed" tab (human-readable)
   final List<ParsedRow> items; // for the editable "List" tab
 }
 
@@ -369,35 +371,39 @@ class _ResultSheetState extends State<_ResultSheet>
     final path = widget.imageFile.path;
 
     switch (widget.mode) {
-      case ScanMode.receipt: {
-        // Strong preprocess -> Vision -> fallback local ML Kit -> parseReceiptText
-        Uint8List? prep = await preprocessForOcr(path);
-        prep ??= await File(path).readAsBytes();
+      case ScanMode.receipt:
+        {
+          // Strong preprocess -> Vision -> fallback local ML Kit -> parseReceiptText
+          Uint8List? prep = await preprocessForOcr(path);
+          prep ??= await File(path).readAsBytes();
 
-        final text = await _visionFirstThenLocal(
-          preparedBytes: prep,
-          originalPath: path,
-        );
+          final text = await _visionFirstThenLocal(
+            preparedBytes: prep,
+            originalPath: path,
+          );
 
-        final rows = parseReceiptText(text);
-        final lines = rows.map((r) => '${r.name} ${r.qty} ${r.unit}').toList();
-        return _ParsedBundle(rawText: text, lines: lines, items: rows);
-      }
+          final rows = parseReceiptText(text);
+          final lines =
+          rows.map((r) => '${r.name} ${r.qty} ${r.unit}').toList();
+          return _ParsedBundle(rawText: text, lines: lines, items: rows);
+        }
 
-      case ScanMode.note: {
-        // Handwriting: light preprocess (same helper) -> Vision -> fallback local -> parseNoteText
-        final maybe = await preprocessForOcr(path);
-        final byts = maybe ?? await File(path).readAsBytes();
+      case ScanMode.groceryList:
+        {
+          // Handwriting/typed notes: light preprocess -> Vision -> fallback local -> parseNoteText
+          final maybe = await preprocessForOcr(path);
+          final byts = maybe ?? await File(path).readAsBytes();
 
-        final text = await _visionFirstThenLocal(
-          preparedBytes: byts,
-          originalPath: path,
-        );
+          final text = await _visionFirstThenLocal(
+            preparedBytes: byts,
+            originalPath: path,
+          );
 
-        final rows = parseNoteText(text);
-        final lines = rows.map((r) => '${r.name} ${r.qty} ${r.unit}').toList();
-        return _ParsedBundle(rawText: text, lines: lines, items: rows);
-      }
+          final rows = parseNoteText(text);
+          final lines =
+          rows.map((r) => '${r.name} ${r.qty} ${r.unit}').toList();
+          return _ParsedBundle(rawText: text, lines: lines, items: rows);
+        }
 
       case ScanMode.text:
       // Not used here; handled by manual composer sheet.
@@ -436,6 +442,9 @@ class _ResultSheetState extends State<_ResultSheet>
               child: FutureBuilder<_ParsedBundle>(
                 future: _future,
                 builder: (_, snap) {
+                  if (snap.hasError) {
+                    return Center(child: Text('Error: ${snap.error}'));
+                  }
                   if (!snap.hasData) {
                     return const Center(child: CircularProgressIndicator());
                   }
@@ -443,9 +452,9 @@ class _ResultSheetState extends State<_ResultSheet>
                   return TabBarView(
                     controller: _tab,
                     children: [
-                      _buildRaw(),     // image
-                      _buildParsed(b), // pretty lines
-                      _buildList(b),   // editable items
+                      _buildRaw(),
+                      _buildParsed(b),
+                      _buildList(b),
                     ],
                   );
                 },
@@ -464,7 +473,8 @@ class _ResultSheetState extends State<_ResultSheet>
     if (b.lines.isEmpty && b.rawText.isNotEmpty) {
       return SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: Text(b.rawText, style: const TextStyle(fontSize: 16, height: 1.35)),
+        child:
+        Text(b.rawText, style: const TextStyle(fontSize: 16, height: 1.35)),
       );
     }
     return ListView.separated(
@@ -479,7 +489,6 @@ class _ResultSheetState extends State<_ResultSheet>
   Widget _buildList(_ParsedBundle b) {
     // `b.items` is a mutable List<ParsedRow>; we'll edit/remove in-place.
     return GestureDetector(
-      // Tap outside a field to dismiss keyboard
       onTap: () => FocusScope.of(context).unfocus(),
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
@@ -508,9 +517,9 @@ class _ResultSheetState extends State<_ResultSheet>
                       ),
                       onChanged: (v) => it.name = v,
                       onFieldSubmitted: (_) =>
-                          FocusScope.of(context).unfocus(), // hide keyboard
+                          FocusScope.of(context).unfocus(),
                       onEditingComplete: () =>
-                          FocusScope.of(context).unfocus(), // also hide
+                          FocusScope.of(context).unfocus(),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -528,7 +537,8 @@ class _ResultSheetState extends State<_ResultSheet>
                         border: InputBorder.none,
                       ),
                       onChanged: (v) {
-                        final n = double.tryParse(v.replaceAll(',', '.'));
+                        final n =
+                        double.tryParse(v.replaceAll(',', '.'));
                         if (n != null) it.qty = n;
                       },
                       onFieldSubmitted: (_) =>
@@ -566,7 +576,6 @@ class _ResultSheetState extends State<_ResultSheet>
                       setState(() {
                         b.items.remove(it);
                       });
-                      // Also dismiss keyboard if this row was focused
                       FocusScope.of(context).unfocus();
                     },
                   ),
@@ -578,7 +587,6 @@ class _ResultSheetState extends State<_ResultSheet>
       ),
     );
   }
-
 }
 
 // ==================== Manual TEXT composer ===================================
@@ -640,7 +648,8 @@ class _ManualTextSheetState extends State<_ManualTextSheet> {
                   maxLines: null,
                   textInputAction: TextInputAction.newline,
                   decoration: InputDecoration(
-                    hintText: 'One item per line (e.g.,\nMilk 2L\nBread 1 loaf\nEggs 12 pcs)',
+                    hintText:
+                    'One item per line (e.g.,\nMilk 2L\nBread 1 loaf\nEggs 12 pcs)',
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
@@ -665,11 +674,12 @@ class _ManualTextSheetState extends State<_ManualTextSheet> {
                     builder: (_) {
                       final items = rows;
                       return ClipRRect(
-                        borderRadius:
-                        const BorderRadius.vertical(top: Radius.circular(24)),
+                        borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(24)),
                         child: Container(
                           color: Theme.of(context).scaffoldBackgroundColor,
-                          height: MediaQuery.of(context).size.height * 0.82,
+                          height:
+                          MediaQuery.of(context).size.height * 0.82,
                           child: ListView.builder(
                             padding:
                             const EdgeInsets.fromLTRB(16, 16, 16, 100),
@@ -682,8 +692,9 @@ class _ManualTextSheetState extends State<_ManualTextSheet> {
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
                                   side: BorderSide(
-                                      color:
-                                      Colors.black.withValues(alpha: 0.06)),
+                                    color: Colors.black
+                                        .withValues(alpha: 0.06),
+                                  ),
                                 ),
                                 child: Padding(
                                   padding: const EdgeInsets.all(12),
@@ -704,7 +715,8 @@ class _ManualTextSheetState extends State<_ManualTextSheet> {
                                       SizedBox(
                                         width: 56,
                                         child: TextFormField(
-                                          initialValue: it.qty.toString(),
+                                          initialValue:
+                                          it.qty.toString(),
                                           keyboardType:
                                           const TextInputType
                                               .numberWithOptions(
@@ -812,42 +824,6 @@ class _Glass extends StatelessWidget {
   }
 }
 
-class _ModeIcon extends StatelessWidget {
-  const _ModeIcon({
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-    required this.tooltip,
-  });
-
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-  final String tooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = selected
-        ? Colors.white.withValues(alpha: 0.92)
-        : Colors.white.withValues(alpha: 0.10);
-    final fg = selected ? Colors.black87 : Colors.white;
-
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(16)),
-          child: Icon(icon, color: fg, size: 20),
-        ),
-      ),
-    );
-  }
-}
-
 class _GlassButton extends StatelessWidget {
   const _GlassButton({
     required this.icon,
@@ -875,7 +851,8 @@ class _GlassButton extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               label,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w600),
             ),
           ],
         ),
