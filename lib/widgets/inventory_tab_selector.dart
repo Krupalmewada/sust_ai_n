@@ -12,7 +12,7 @@ class InventoryTabSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tabs = ["Categories", "List", "Recipes"];
+    final tabs = ["Recipes", "List", "Categories"];
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.start,

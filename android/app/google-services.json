@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "68975839347",
+    "project_id": "sust-ai-n",
+    "storage_bucket": "sust-ai-n.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:68975839347:android:2cccb5b20aac2e814c8206",
+        "android_client_info": {
+          "package_name": "com.example.sust_ai_n"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCsuwIZ5ctkhTHQZUgjzQ9ZkdL3azT20JE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

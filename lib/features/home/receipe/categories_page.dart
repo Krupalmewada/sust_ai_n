@@ -1,177 +1,102 @@
 import 'package:flutter/material.dart';
 
-import '../../../widgets/bottom_nav_bar.dart';
-import '../../../widgets/inventory_tab_selector.dart';
-
 class CategoriesPage extends StatelessWidget {
   const CategoriesPage({super.key});
 
+  // Sample static categories (you can later fetch from Firestore or Spoonacular)
+  final List<Map<String, dynamic>> categories = const [
+    {'name': 'Vegetables', 'icon': Icons.eco, 'color': Color(0xFFE8F5E9)},
+    {'name': 'Fruits', 'icon': Icons.apple, 'color': Color(0xFFFFEBEE)},
+    {'name': 'Dairy', 'icon': Icons.local_drink, 'color': Color(0xFFE3F2FD)},
+    {'name': 'Bakery', 'icon': Icons.bakery_dining, 'color': Color(0xFFFFF3E0)},
+    {'name': 'Grains', 'icon': Icons.rice_bowl, 'color': Color(0xFFF3E5F5)},
+    {'name': 'Snacks', 'icon': Icons.fastfood, 'color': Color(0xFFFFFDE7)},
+    {'name': 'Meat', 'icon': Icons.set_meal, 'color': Color(0xFFFFEBEE)},
+    {'name': 'Spices', 'icon': Icons.local_fire_department, 'color': Color(0xFFFFF8E1)},
+  ];
+
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    final height = MediaQuery.of(context).size.height;
-
-    final List<Map<String, dynamic>> categories = [
-      {"name": "Fruits", "color": 0xFFFFEAEA, "emoji": "🍊"},
-      {"name": "Dairy", "color": 0xFFE6F0FF, "emoji": "🥛"},
-      {"name": "Vegetables", "color": 0xFFEFEAFF, "emoji": "🥦"},
-      {"name": "Carbs", "color": 0xFFFFF6E5, "emoji": "🍞"},
-      {"name": "Meat", "color": 0xFFE8F6FF, "emoji": "🥩"},
-      {"name": "Oils", "color": 0xFFFFFBEA, "emoji": "🫒"},
-    ];
-
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
+      body: GridView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2, // two per row
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          childAspectRatio: 1.05,
         ),
-        title: const Text(
-          "My Inventory",
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
-        ),
-        centerTitle: true,
-      ),
-      body: Padding(
-        padding: EdgeInsets.symmetric(horizontal: width * 0.05),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 🔍 Search bar
-            Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: width * 0.04,
-                vertical: height * 0.012,
-              ),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF5F5F5),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.search, color: Colors.grey),
-                  SizedBox(width: width * 0.02),
-                  const Expanded(
-                    child: Text(
-                      "Search for items",
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            SizedBox(height: height * 0.03),
-
-            const Text(
-              "Overall",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: height * 0.015),
-
-            // Tabs row (Categories highlighted)
-            InventoryTabSelector(
-              selectedIndex: 0, // Categories selected
-              onTabSelected: (index) {
-                if (index == 1) {
-                  Navigator.pushNamed(context, '/inventoryList');
-                } else if (index == 2) {
-                  Navigator.pushNamed(context, '/recipes');
-                }
-              },
-            ),
-
-            SizedBox(height: height * 0.02),
-
-            // Grid of categories
-            Expanded(
-              child: GridView.builder(
-                padding: const EdgeInsets.only(top: 8, bottom: 16),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: width * 0.05,
-                  crossAxisSpacing: width * 0.05,
-                  childAspectRatio: 1.1,
+        itemCount: categories.length,
+        itemBuilder: (context, index) {
+          final cat = categories[index];
+          return _CategoryCard(
+            name: cat['name'],
+            icon: cat['icon'],
+            color: cat['color'],
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Selected ${cat['name']}'),
+                  duration: const Duration(milliseconds: 800),
                 ),
-                itemCount: categories.length,
-                itemBuilder: (context, index) {
-                  final cat = categories[index];
-                  return Container(
-                    decoration: BoxDecoration(
-                      color: Color(cat["color"]),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          cat["emoji"],
-                          style: TextStyle(fontSize: width * 0.15),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          cat["name"],
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: BottomNavBar(
-        currentIndex: 1, // Recipes section
-        onTap: (index) {
-          if (index == 0) {
-            Navigator.pushNamed(context, '/inventory');
-          } else if (index == 1) {
-            Navigator.pushNamed(context, '/recipes');
-          }
+              );
+            },
+          );
         },
       ),
     );
   }
 }
 
-class _TabLabel extends StatelessWidget {
-  final String label;
-  final bool selected;
+class _CategoryCard extends StatelessWidget {
+  final String name;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
 
-  const _TabLabel({required this.label, required this.selected});
+  const _CategoryCard({
+    required this.name,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-            color: selected ? Colors.black : Colors.grey,
-          ),
-        ),
-        if (selected)
-          Container(
-            margin: const EdgeInsets.only(top: 4),
-            height: 3,
-            width: 30,
-            decoration: BoxDecoration(
-              color: const Color(0xFF23C483),
-              borderRadius: BorderRadius.circular(12),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
             ),
-          ),
-      ],
+          ],
+        ),
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: Colors.green.shade800, size: 40),
+            const SizedBox(height: 12),
+            Text(
+              name,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
