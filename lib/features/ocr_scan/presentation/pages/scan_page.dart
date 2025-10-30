@@ -1,12 +1,4 @@
 // lib/features/ocr_scan/presentation/pages/scan_page.dart
-//
-// Full-screen camera UI + OCR wiring:
-// Receipt  -> preprocessForOcr -> CloudVision (if key) -> fallback ML Kit -> parseReceiptText
-// Grocery  -> light preprocess  -> CloudVision (if key) -> fallback ML Kit -> parseNoteText
-// Text     -> manual composer -> parseNoteText
-//
-// Requires --dart-define=VISION_API_KEY=YOUR_KEY when running.
-
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
@@ -19,12 +11,11 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 
 import '../../domain/image_preprocess.dart';
 import '../../domain/cloud_vision_service.dart';
-import '../../domain/parse_receipt_text.dart'; // contains parseReceiptText + parseNoteText
+import '../../domain/parse_receipt_text.dart';
 import '../../domain/parsed_row.dart';
 
 enum ScanMode { receipt, groceryList, text }
 
-/// Read your Google Vision API key from --dart-define.
 const String _visionApiKey =
 String.fromEnvironment('VISION_API_KEY', defaultValue: '');
 
@@ -40,7 +31,6 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
   bool _flashOn = false;
   ScanMode _mode = ScanMode.receipt;
 
-  // Services
   final _vision = CloudVisionService(apiKey: _visionApiKey);
 
   @override
@@ -141,8 +131,11 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
     );
   }
 
-  void _openResultSheet({required File imageFile}) {
-    showModalBottomSheet(
+  Future<void> _openResultSheet({required File imageFile}) async {
+    // If you want to capture the returned items, await here:
+    // final result = await showModalBottomSheet<List<ParsedRow>>( ... );
+    // if (result != null) { /* add to inventory in caller */ }
+    await showModalBottomSheet<List<ParsedRow>>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -154,7 +147,6 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
     );
   }
 
-  // --------------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -163,7 +155,7 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
         fit: StackFit.expand,
         children: [
           _buildCoverCamera(),
-          Positioned(top: 8, left: 0, right: 0, child: _buildTopRibbon()),
+          Positioned(top: 8, left: 0, right: 0, child: _buildTopSegment()),
           Positioned(bottom: 0, left: 0, right: 0, child: _buildBottomBar()),
         ],
       ),
@@ -181,8 +173,7 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
     final ps = cam.value.previewSize;
     if (ps == null) return CameraPreview(cam);
 
-    // Swap for portrait; cover without letterboxing.
-    final previewW = ps.height;
+    final previewW = ps.height; // camera plugin swaps for portrait
     final previewH = ps.width;
 
     return FittedBox(
@@ -196,31 +187,35 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
     );
   }
 
-  // --- NEW: labeled segmented ribbon ----------------------------------------
-  Widget _buildTopRibbon() {
+  Widget _buildTopSegment() {
     return SafeArea(
       bottom: false,
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 640),
+          constraints: const BoxConstraints(maxWidth: 600),
           child: _Glass(
             blur: 14,
             radius: 24,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             child: SegmentedButton<ScanMode>(
-              segments: <ButtonSegment<ScanMode>>[
-                const ButtonSegment<ScanMode>(
+              showSelectedIcon: false,
+              style: ButtonStyle(
+                padding: WidgetStateProperty.all(
+                  const EdgeInsets.symmetric(horizontal: 8),
+                ),
+              ),
+              segments: const [
+                ButtonSegment(
                   value: ScanMode.receipt,
                   icon: Icon(Icons.receipt_long),
                   label: Text('Receipt'),
                 ),
-                const ButtonSegment<ScanMode>(
+                ButtonSegment(
                   value: ScanMode.groceryList,
-                  // If your SDK doesn't have Icons.checklist, use playlist_add_check:
-                  icon: Icon(Icons.checklist), // or: Icon(Icons.playlist_add_check)
-                  label: Text('Grocery list'),
+                  icon: Icon(Icons.checklist),
+                  label: Text('Grocery List'),
                 ),
-                const ButtonSegment<ScanMode>(
+                ButtonSegment(
                   value: ScanMode.text,
                   icon: Icon(Icons.edit_note),
                   label: Text('Text'),
@@ -230,11 +225,6 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
               onSelectionChanged: (set) {
                 setState(() => _mode = set.first);
               },
-              multiSelectionEnabled: false,
-              showSelectedIcon: false,
-              style: const ButtonStyle(
-                visualDensity: VisualDensity.compact,
-              ),
             ),
           ),
         ),
@@ -278,8 +268,7 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
               ),
             ),
             _GlassButton(
-              icon:
-              _flashOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
+              icon: _flashOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
               label: _flashOn ? 'Flash' : 'No flash',
               onTap: _toggleFlash,
             ),
@@ -290,7 +279,7 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
   }
 }
 
-// ====================== Result Sheet =========================================
+// -------------------- Result Sheet: ONLY shows final list + actions ----------
 
 class _ResultSheet extends StatefulWidget {
   const _ResultSheet({
@@ -313,30 +302,24 @@ class _ParsedBundle {
     required this.lines,
     required this.items,
   });
-  final String rawText;
-  final List<String> lines; // for the "Parsed" tab (human-readable)
-  final List<ParsedRow> items; // for the editable "List" tab
+  final String rawText;      // logged only
+  final List<String> lines;  // logged only
+  final List<ParsedRow> items; // shown & returned
 }
 
-class _ResultSheetState extends State<_ResultSheet>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tab;
+class _ResultSheetState extends State<_ResultSheet> {
   late Future<_ParsedBundle> _future;
-
-  // Local OCR for fallback / fast path
   final TextRecognizer _localOcr =
   TextRecognizer(script: TextRecognitionScript.latin);
 
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 3, vsync: this);
     _future = _compute();
   }
 
   @override
   void dispose() {
-    _tab.dispose();
     _localOcr.close();
     super.dispose();
   }
@@ -347,8 +330,6 @@ class _ResultSheetState extends State<_ResultSheet>
     return result.text;
   }
 
-  /// Prefer Cloud Vision (if key present). If it returns empty,
-  /// fallback to local ML Kit on the original image path.
   Future<String> _visionFirstThenLocal({
     required Uint8List preparedBytes,
     required String originalPath,
@@ -367,13 +348,23 @@ class _ResultSheetState extends State<_ResultSheet>
     return text.trim();
   }
 
+  void _logParsed({required String raw, required List<String> lines}) {
+    final snippet = raw.length > 1200 ? '${raw.substring(0, 1200)}…' : raw;
+    debugPrint('==== OCR RAW (snippet) ====');
+    debugPrint(snippet);
+    debugPrint('==== PARSED LINES (${lines.length}) ====');
+    for (final l in lines) {
+      debugPrint('• $l');
+    }
+  }
+
   Future<_ParsedBundle> _compute() async {
     final path = widget.imageFile.path;
 
     switch (widget.mode) {
       case ScanMode.receipt:
+      case ScanMode.groceryList:
         {
-          // Strong preprocess -> Vision -> fallback local ML Kit -> parseReceiptText
           Uint8List? prep = await preprocessForOcr(path);
           prep ??= await File(path).readAsBytes();
 
@@ -382,33 +373,33 @@ class _ResultSheetState extends State<_ResultSheet>
             originalPath: path,
           );
 
-          final rows = parseReceiptText(text);
-          final lines =
-          rows.map((r) => '${r.name} ${r.qty} ${r.unit}').toList();
+          final rows = widget.mode == ScanMode.receipt
+              ? parseReceiptText(text)
+              : parseNoteText(text);
+
+          final lines = rows.map((r) => '${r.name} ${r.qty} ${r.unit}').toList();
+          _logParsed(raw: text, lines: lines);
           return _ParsedBundle(rawText: text, lines: lines, items: rows);
         }
-
-      case ScanMode.groceryList:
-        {
-          // Handwriting/typed notes: light preprocess -> Vision -> fallback local -> parseNoteText
-          final maybe = await preprocessForOcr(path);
-          final byts = maybe ?? await File(path).readAsBytes();
-
-          final text = await _visionFirstThenLocal(
-            preparedBytes: byts,
-            originalPath: path,
-          );
-
-          final rows = parseNoteText(text);
-          final lines =
-          rows.map((r) => '${r.name} ${r.qty} ${r.unit}').toList();
-          return _ParsedBundle(rawText: text, lines: lines, items: rows);
-        }
-
       case ScanMode.text:
-      // Not used here; handled by manual composer sheet.
         return _ParsedBundle(rawText: '', lines: const [], items: const []);
     }
+  }
+
+  void _onRetake() {
+    Navigator.of(context).pop(); // back to camera view
+  }
+
+  void _onAddToInventory(_ParsedBundle b) {
+    // Log & return items to the caller (ScanPage) if it awaits the result.
+    debugPrint('=== ADD TO INVENTORY (${b.items.length}) ===');
+    for (final it in b.items) {
+      debugPrint('- ${it.name}  qty=${it.qty}  unit=${it.unit}');
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Items added to inventory')),
+    );
+    Navigator.of(context).pop<List<ParsedRow>>(b.items);
   }
 
   @override
@@ -430,14 +421,31 @@ class _ResultSheetState extends State<_ResultSheet>
               ),
             ),
             const SizedBox(height: 12),
-            TabBar(
-              controller: _tab,
-              labelColor: Theme.of(context).colorScheme.primary,
-              unselectedLabelColor: Colors.black54,
-              indicatorSize: TabBarIndicatorSize.label,
-              tabs: const [Tab(text: 'Raw'), Tab(text: 'Parsed'), Tab(text: 'List')],
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  const Text(
+                    'Items',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(width: 8),
+                  FutureBuilder<_ParsedBundle>(
+                    future: _future,
+                    builder: (_, s) {
+                      final count = s.hasData ? s.data!.items.length : 0;
+                      return Text('($count)',
+                          style: TextStyle(
+                            color: Colors.black.withValues(alpha: 0.6),
+                          ));
+                    },
+                  ),
+                ],
+              ),
             ),
-            const Divider(height: 1),
+            const Divider(height: 16),
+
+            // List area
             Expanded(
               child: FutureBuilder<_ParsedBundle>(
                 future: _future,
@@ -449,15 +457,45 @@ class _ResultSheetState extends State<_ResultSheet>
                     return const Center(child: CircularProgressIndicator());
                   }
                   final b = snap.data!;
-                  return TabBarView(
-                    controller: _tab,
-                    children: [
-                      _buildRaw(),
-                      _buildParsed(b),
-                      _buildList(b),
-                    ],
-                  );
+                  return _buildList(b);
                 },
+              ),
+            ),
+
+            // Bottom action bar
+            const Divider(height: 1),
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: FutureBuilder<_ParsedBundle>(
+                  future: _future,
+                  builder: (_, snap) {
+                    final b = snap.data;
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _onRetake,
+                            icon: const Icon(Icons.camera_alt_outlined),
+                            label: const Text('Retake photo'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: b == null
+                                ? null
+                                : () => _onAddToInventory(b),
+                            icon: const Icon(Icons.add_task_rounded),
+                            label: const Text('Add to inventory'),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ),
             ),
           ],
@@ -466,32 +504,12 @@ class _ResultSheetState extends State<_ResultSheet>
     );
   }
 
-  Widget _buildRaw() =>
-      InteractiveViewer(child: Image.file(widget.imageFile, fit: BoxFit.contain));
-
-  Widget _buildParsed(_ParsedBundle b) {
-    if (b.lines.isEmpty && b.rawText.isNotEmpty) {
-      return SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child:
-        Text(b.rawText, style: const TextStyle(fontSize: 16, height: 1.35)),
-      );
-    }
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemBuilder: (_, i) =>
-          Text(b.lines[i], style: const TextStyle(fontSize: 16, height: 1.35)),
-      separatorBuilder: (_, __) => const Divider(height: 16),
-      itemCount: b.lines.length,
-    );
-  }
-
   Widget _buildList(_ParsedBundle b) {
-    // `b.items` is a mutable List<ParsedRow>; we'll edit/remove in-place.
+    // extra bottom padding so the list doesn't hide behind the action bar
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 140),
         itemCount: b.items.length,
         itemBuilder: (_, i) {
           final it = b.items[i];
@@ -506,7 +524,6 @@ class _ResultSheetState extends State<_ResultSheet>
               padding: const EdgeInsets.all(12),
               child: Row(
                 children: [
-                  // Item name
                   Expanded(
                     child: TextFormField(
                       initialValue: it.name,
@@ -523,22 +540,19 @@ class _ResultSheetState extends State<_ResultSheet>
                     ),
                   ),
                   const SizedBox(width: 12),
-
-                  // Qty
                   SizedBox(
                     width: 56,
                     child: TextFormField(
                       initialValue: it.qty.toString(),
                       textInputAction: TextInputAction.done,
-                      keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true),
                       decoration: const InputDecoration(
                         labelText: 'Qty',
                         border: InputBorder.none,
                       ),
                       onChanged: (v) {
-                        final n =
-                        double.tryParse(v.replaceAll(',', '.'));
+                        final n = double.tryParse(v.replaceAll(',', '.'));
                         if (n != null) it.qty = n;
                       },
                       onFieldSubmitted: (_) =>
@@ -548,8 +562,6 @@ class _ResultSheetState extends State<_ResultSheet>
                     ),
                   ),
                   const SizedBox(width: 12),
-
-                  // Unit
                   DropdownButton<String>(
                     value: it.unit,
                     underline: const SizedBox.shrink(),
@@ -567,8 +579,6 @@ class _ResultSheetState extends State<_ResultSheet>
                       if (v != null) setState(() => it.unit = v);
                     },
                   ),
-
-                  // Delete button
                   IconButton(
                     tooltip: 'Remove',
                     icon: const Icon(Icons.delete_outline),
@@ -589,7 +599,7 @@ class _ResultSheetState extends State<_ResultSheet>
   }
 }
 
-// ==================== Manual TEXT composer ===================================
+// -------------------------- Manual text composer -----------------------------
 
 class _ManualTextSheet extends StatefulWidget {
   const _ManualTextSheet();
@@ -666,7 +676,6 @@ class _ManualTextSheetState extends State<_ManualTextSheet> {
                 onPressed: () {
                   final text = _controller.text.trim();
                   final rows = parseNoteText(text);
-                  // Show editable list in a simple sheet
                   showModalBottomSheet(
                     context: context,
                     isScrollControlled: true,
@@ -678,8 +687,7 @@ class _ManualTextSheetState extends State<_ManualTextSheet> {
                             top: Radius.circular(24)),
                         child: Container(
                           color: Theme.of(context).scaffoldBackgroundColor,
-                          height:
-                          MediaQuery.of(context).size.height * 0.82,
+                          height: MediaQuery.of(context).size.height * 0.82,
                           child: ListView.builder(
                             padding:
                             const EdgeInsets.fromLTRB(16, 16, 16, 100),
@@ -692,9 +700,7 @@ class _ManualTextSheetState extends State<_ManualTextSheet> {
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
                                   side: BorderSide(
-                                    color: Colors.black
-                                        .withValues(alpha: 0.06),
-                                  ),
+                                      color: Colors.black.withValues(alpha: 0.06)),
                                 ),
                                 child: Padding(
                                   padding: const EdgeInsets.all(12),
@@ -703,8 +709,7 @@ class _ManualTextSheetState extends State<_ManualTextSheet> {
                                       Expanded(
                                         child: TextFormField(
                                           initialValue: it.name,
-                                          decoration:
-                                          const InputDecoration(
+                                          decoration: const InputDecoration(
                                             labelText: 'Item name',
                                             border: InputBorder.none,
                                           ),
@@ -715,14 +720,11 @@ class _ManualTextSheetState extends State<_ManualTextSheet> {
                                       SizedBox(
                                         width: 56,
                                         child: TextFormField(
-                                          initialValue:
-                                          it.qty.toString(),
+                                          initialValue: it.qty.toString(),
                                           keyboardType:
-                                          const TextInputType
-                                              .numberWithOptions(
+                                          const TextInputType.numberWithOptions(
                                               decimal: true),
-                                          decoration:
-                                          const InputDecoration(
+                                          decoration: const InputDecoration(
                                             labelText: 'Qty',
                                             border: InputBorder.none,
                                           ),
@@ -736,8 +738,7 @@ class _ManualTextSheetState extends State<_ManualTextSheet> {
                                       const SizedBox(width: 12),
                                       DropdownButton<String>(
                                         value: it.unit,
-                                        underline:
-                                        const SizedBox.shrink(),
+                                        underline: const SizedBox.shrink(),
                                         items: const [
                                           DropdownMenuItem(
                                               value: 'pcs',
@@ -789,7 +790,7 @@ class _ManualTextSheetState extends State<_ManualTextSheet> {
   }
 }
 
-// ==================== Small UI helpers =======================================
+// ----------------------------- Small UI helpers ------------------------------
 
 class _Glass extends StatelessWidget {
   const _Glass({
