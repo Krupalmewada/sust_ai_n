@@ -5,7 +5,7 @@ class InventoryService {
   final _firestore = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
 
-  /// 🔹 Add a single item to user's inventory
+  /// 🔹 Add a single item to inventory
   Future<void> addItem({
     required String name,
     required num qty,
@@ -17,11 +17,13 @@ class InventoryService {
     final user = _auth.currentUser;
     if (user == null) throw Exception('User not signed in');
 
-    await _firestore
+    final ref = _firestore
         .collection('users')
-        .doc(user.email!.toLowerCase())
+        .doc(user.uid)
         .collection('inventory')
-        .add({
+        .doc();
+
+    await ref.set({
       'name': name,
       'qty': qty,
       'unit': unit,
@@ -32,7 +34,7 @@ class InventoryService {
     });
   }
 
-  /// 🔹 Add multiple items at once (e.g. from OCR scan)
+  /// 🔹 Add multiple items (e.g. from OCR scan)
   Future<void> addItems(List<Map<String, dynamic>> items) async {
     final user = _auth.currentUser;
     if (user == null) throw Exception('User not signed in');
@@ -46,7 +48,7 @@ class InventoryService {
     for (final item in items) {
       final doc = ref.doc();
       batch.set(doc, {
-        'name': item['name'],
+        'name': item['name'] ?? 'Unknown',
         'qty': item['qty'] ?? 1,
         'unit': item['unit'] ?? 'pcs',
         'category': item['category'] ?? 'Uncategorized',
@@ -59,7 +61,7 @@ class InventoryService {
     await batch.commit();
   }
 
-  /// 🔹 Get all inventory items (real-time stream)
+  /// 🔹 Get real-time inventory stream
   Stream<List<Map<String, dynamic>>> getItems() {
     final user = _auth.currentUser;
     if (user == null) throw Exception('User not signed in');
@@ -72,12 +74,12 @@ class InventoryService {
         .snapshots()
         .map((snap) => snap.docs.map((doc) {
       final data = doc.data();
-      data['id'] = doc.id; // attach docId for deletion later
+      data['id'] = doc.id;
       return data;
     }).toList());
   }
 
-  /// 🔹 Delete an item by document ID
+  /// 🔹 Delete a specific item
   Future<void> deleteItem(String docId) async {
     final user = _auth.currentUser;
     if (user == null) throw Exception('User not signed in');
@@ -90,7 +92,7 @@ class InventoryService {
         .delete();
   }
 
-  /// 🔹 (Optional) Clear all inventory items
+  /// 🔹 Optional: Clear entire inventory
   Future<void> clearInventory() async {
     final user = _auth.currentUser;
     if (user == null) throw Exception('User not signed in');

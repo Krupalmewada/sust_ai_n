@@ -38,12 +38,12 @@ class _UserLoginState extends State<UserLogin> {
       await FirebaseAuth.instance.signInWithCredential(credential);
       final user = userCredential.user;
 
-      if (user != null && user.email != null) {
-        final email = user.email!.toLowerCase();
+      if (user != null) {
+        final uid = user.uid;
 
-        // 🔹 Step 4: Create Firestore user doc (email as ID)
+        // 🔹 Step 4: Create or update Firestore user doc (using UID)
         final userDoc =
-        FirebaseFirestore.instance.collection('users').doc(email);
+        FirebaseFirestore.instance.collection('users').doc(uid);
 
         final snapshot = await userDoc.get();
         if (!snapshot.exists) {
@@ -51,23 +51,23 @@ class _UserLoginState extends State<UserLogin> {
             'profile': {
               'info': {
                 'name': user.displayName ?? 'No name',
-                'email': email,
+                'email': user.email?.toLowerCase(),
                 'photoUrl': user.photoURL,
-                'uid': user.uid,
+                'uid': uid,
                 'createdAt': FieldValue.serverTimestamp(),
                 'lastLogin': FieldValue.serverTimestamp(),
-              }
-            }
+              },
+            },
           });
-          debugPrint('✅ New user created in Firestore: $email');
+          debugPrint('✅ New user created in Firestore: $uid');
         } else {
           await userDoc.update({
             'profile.info.lastLogin': FieldValue.serverTimestamp(),
           });
-          debugPrint('🔄 Existing user updated: $email');
+          debugPrint('🔄 Existing user updated: $uid');
         }
 
-        // 🔹 Step 5: Navigate inside
+        // 🔹 Step 5: Navigate to inventory
         if (mounted) Navigator.pushReplacementNamed(context, '/inventory');
       }
     } catch (e) {

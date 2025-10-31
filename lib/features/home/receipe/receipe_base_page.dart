@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../../../widgets/bottom_nav_bar.dart';
 import '../../../widgets/inventory_tab_selector.dart';
 import 'categories_page.dart';
@@ -13,10 +16,47 @@ class ReceipeBasePage extends StatefulWidget {
 }
 
 class _ReceipeBasePageState extends State<ReceipeBasePage> {
-  int _selectedTabIndex = 0; // 0 = Recipes (default)
+  int _selectedTabIndex = 0;
   final TextEditingController _searchController = TextEditingController();
 
-  final List<String> _inventoryItems = ["Onion", "Butter", "Spinach"];
+  List<String> _inventoryItems = [];
+  bool _isLoadingInventory = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchInventoryItems();
+  }
+
+  /// 🔹 Fetch inventory items from Firestore
+  Future<void> _fetchInventoryItems() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception('User not logged in');
+
+      final ref = FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('inventory');
+
+      final snapshot = await ref.get();
+
+      final items = snapshot.docs
+          .map((doc) => doc['name']?.toString() ?? '')
+          .where((name) => name.isNotEmpty)
+          .toList();
+
+      setState(() {
+        _inventoryItems = items;
+        _isLoadingInventory = false;
+      });
+
+      debugPrint('🧾 Loaded inventory items: $_inventoryItems');
+    } catch (e) {
+      debugPrint('❌ Failed to fetch inventory: $e');
+      setState(() => _isLoadingInventory = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,7 +87,9 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
       // ---------- Body ----------
       body: Padding(
         padding: EdgeInsets.symmetric(horizontal: width * 0.05),
-        child: Column(
+        child: _isLoadingInventory
+            ? const Center(child: CircularProgressIndicator())
+            : Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // 🔍 Shared Search Bar
@@ -98,7 +140,8 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
                   : _selectedTabIndex == 1
                   ? "Your Grocery List"
                   : "Your Categories",
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                  fontSize: 20, fontWeight: FontWeight.bold),
             ),
 
             SizedBox(height: height * 0.015),

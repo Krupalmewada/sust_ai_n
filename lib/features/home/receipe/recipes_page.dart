@@ -8,7 +8,7 @@ class RecipesPage extends StatefulWidget {
   const RecipesPage({super.key, required this.inventoryItems});
 
   @override
-  RecipesPageState createState() => RecipesPageState(); // ✅ no underscore
+  RecipesPageState createState() => RecipesPageState();
 }
 
 class RecipesPageState extends State<RecipesPage> {
@@ -24,32 +24,106 @@ class RecipesPageState extends State<RecipesPage> {
     _fetchRecipes(widget.inventoryItems);
   }
 
+  // ✅ FIXED — only one _fetchRecipes() definition
   Future<void> _fetchRecipes(List<String> ingredients) async {
     if (ingredients.isEmpty) return;
     setState(() => _isLoading = true);
 
     try {
-      final ingredientString = ingredients.join(',');
-      final url =
-          '$_baseUrl/recipes/findByIngredients?ingredients=$ingredientString&number=10&ranking=2&apiKey=$_apiKey';
-      final response = await http.get(Uri.parse(url));
+      // 1️⃣ Find recipes by ingredients
+      final ingredientString = ingredients
+          .map((e) => e.trim().toLowerCase())
+          .where((e) => e.isNotEmpty)
+          .join(',');
 
-      if (response.statusCode == 200) {
-        final List data = json.decode(response.body);
-        setState(() {
-          _recipes = data.map((e) => e as Map<String, dynamic>).toList();
-        });
-      } else {
-        debugPrint('❌ Error fetching recipes: ${response.body}');
+      final findUri = Uri.https(
+        'api.spoonacular.com',
+        '/recipes/findByIngredients',
+        {
+          'ingredients': ingredientString,
+          'number': '5',
+          'ranking': '2',
+          'apiKey': _apiKey,
+        },
+      );
+
+      final findRes = await http.get(findUri);
+
+      if (findRes.statusCode != 200) {
+        debugPrint('❌ findByIngredients failed: ${findRes.body}');
+        setState(() => _isLoading = false);
+        return;
       }
+
+      final List findData = json.decode(findRes.body);
+      if (findData.isEmpty) {
+        debugPrint('⚠️ No recipes found.');
+        setState(() => _recipes = []);
+        return;
+      }
+
+      // 2️⃣ Extract recipe IDs
+      final ids = findData.map((r) => r['id'].toString()).toList();
+      final idsParam = ids.join(',');
+
+      // 3️⃣ Fetch details (servings + calories)
+      final infoUri = Uri.https(
+        'api.spoonacular.com',
+        '/recipes/informationBulk',
+        {
+          'ids': idsParam,
+          'includeNutrition': 'true',
+          'apiKey': _apiKey,
+        },
+      );
+
+      final infoRes = await http.get(infoUri);
+      if (infoRes.statusCode != 200) {
+        debugPrint('⚠️ Bulk info failed: ${infoRes.body}');
+        setState(() {
+          _recipes = findData.map((e) => e as Map<String, dynamic>).toList();
+        });
+        return;
+      }
+
+      final List infoData = json.decode(infoRes.body);
+
+      // 4️⃣ Merge & extract nutrition info
+      final enriched = infoData.map((recipe) {
+        final nutrients = (recipe['nutrition']?['nutrients'] as List?) ?? [];
+        final calRow = nutrients.cast<Map>().firstWhere(
+              (n) => n['name'] == 'Calories',
+          orElse: () => {},
+        );
+
+        final calories = calRow.isNotEmpty
+            ? '${calRow['amount'].round()} ${calRow['unit']}'
+            : 'N/A';
+        final servings = recipe['servings']?.toString() ?? 'N/A';
+
+        return {
+          'id': recipe['id'],
+          'title': recipe['title'],
+          'image': recipe['image'],
+          'calories': calories,
+          'servings': servings,
+        };
+      }).toList();
+
+      // 5️⃣ Update UI
+      setState(() {
+        _recipes = enriched.cast<Map<String, dynamic>>();
+      });
+
+      debugPrint('✅ Loaded ${_recipes.length} recipes with nutrition');
     } catch (e) {
-      debugPrint('❌ Exception: $e');
+      debugPrint('❌ Exception fetching recipes: $e');
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
-  // 🔎 Called from ReceipeBasePage
+  // 🔍 From ReceipeBasePage
   void searchRecipes(String query) {
     if (query.isEmpty) {
       _fetchRecipes(widget.inventoryItems);
@@ -97,10 +171,12 @@ class RecipesPageState extends State<RecipesPage> {
             title: Text(
               recipe['title'] ?? 'Untitled',
               style: const TextStyle(
-                  fontWeight: FontWeight.w600, fontSize: 16),
+                fontWeight: FontWeight.w600,
+                fontSize: 16,
+              ),
             ),
             subtitle: Text(
-              "${recipe['usedIngredientCount']} used • ${recipe['missedIngredientCount']} missing",
+              "🍽 ${recipe['servings'] ?? 'N/A'} servings  |  🔥 ${recipe['calories'] ?? 'N/A'} kcal",
               style:
               const TextStyle(color: Colors.grey, fontSize: 13),
             ),
