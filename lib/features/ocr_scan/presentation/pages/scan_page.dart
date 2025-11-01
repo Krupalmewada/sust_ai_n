@@ -15,7 +15,8 @@ import '../../domain/image_preprocess.dart';
 import '../../domain/parse_receipt_text.dart';
 import '../../domain/parsed_row.dart';
 
-enum ScanMode { receipt, note, text }
+// NOTE: Text mode removed
+enum ScanMode { receipt, note }
 
 const String _visionApiKey =
 String.fromEnvironment('VISION_API_KEY', defaultValue: '');
@@ -96,10 +97,6 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
   }
 
   Future<void> _onShutter() async {
-    if (_mode == ScanMode.text) {
-      _openTextComposer();
-      return;
-    }
     final cam = _cam;
     if (cam == null || !cam.value.isInitialized || cam.value.isTakingPicture) {
       return;
@@ -117,15 +114,6 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
     await picker.pickImage(source: ImageSource.gallery, imageQuality: 92);
     if (img == null || !mounted) return;
     _openResultSheet(imageFile: File(img.path));
-  }
-
-  void _openTextComposer() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const _ManualTextSheet(),
-    );
   }
 
   void _openResultSheet({required File imageFile}) {
@@ -182,7 +170,7 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
     );
   }
 
-  // ---------- TOP RIBBON (reference-matched, no overflow) ----------
+  // ---------- TOP RIBBON (two chips, no overflow) ----------
   Widget _buildTopRibbon() {
     const double chipHeight = 36.0;
     const double gap = 6.0;
@@ -206,7 +194,6 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
                 mainAxisSize: MainAxisSize.max,
                 children: [
                   Expanded(
-                    flex: 29,
                     child: _SegmentChipFlex(
                       height: chipHeight,
                       label: 'Receipt',
@@ -217,24 +204,12 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
                   ),
                   const SizedBox(width: gap),
                   Expanded(
-                    flex: 42, // slightly wider center like the reference
                     child: _SegmentChipFlex(
                       height: chipHeight,
                       label: 'Grocery List',
                       icon: Icons.playlist_add_check_rounded,
                       selected: _mode == ScanMode.note,
                       onTap: () => setState(() => _mode = ScanMode.note),
-                    ),
-                  ),
-                  const SizedBox(width: gap),
-                  Expanded(
-                    flex: 29,
-                    child: _SegmentChipFlex(
-                      height: chipHeight,
-                      label: 'Text',
-                      icon: Icons.subject_rounded,
-                      selected: _mode == ScanMode.text,
-                      onTap: () => setState(() => _mode = ScanMode.text),
                     ),
                   ),
                 ],
@@ -258,7 +233,6 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
               icon: Icons.photo_library_rounded,
               onTap: _onPickFromGallery,
             ),
-            // Center shutter with camera icon
             SizedBox(
               width: 88,
               height: 88,
@@ -431,9 +405,6 @@ class _ResultSheetState extends State<_ResultSheet> {
         }
 
         return _ParsedBundle(rawText: text, items: rows);
-
-      case ScanMode.text:
-        return _ParsedBundle(rawText: '', items: const []);
     }
   }
 
@@ -474,7 +445,25 @@ class _ResultSheetState extends State<_ResultSheet> {
                     borderRadius: BorderRadius.circular(100),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
+
+                // Add item button
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      icon: const Icon(Icons.add_circle_outline_rounded),
+                      label: const Text('Add item'),
+                      onPressed: () {
+                        setState(() {
+                          b.items.add(ParsedRow(name: '', qty: 1, unit: 'pcs'));
+                        });
+                      },
+                    ),
+                  ),
+                ),
+
                 Expanded(child: _buildList(b)),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -516,6 +505,7 @@ class _ResultSheetState extends State<_ResultSheet> {
         itemBuilder: (_, i) {
           final it = items[i];
           return Card(
+            key: ValueKey(it), // keep row identity stable
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
@@ -574,7 +564,10 @@ class _ResultSheetState extends State<_ResultSheet> {
                     tooltip: 'Remove',
                     icon: const Icon(Icons.delete_outline),
                     onPressed: () {
-                      setState(() => items.removeAt(i));
+                      setState(() {
+                        // remove the exact object next to the trash icon
+                        items.remove(it);
+                      });
                       FocusScope.of(context).unfocus();
                     },
                   ),
@@ -588,96 +581,7 @@ class _ResultSheetState extends State<_ResultSheet> {
   }
 }
 
-// ==================== Manual TEXT composer ===================================
-
-class _ManualTextSheet extends StatefulWidget {
-  const _ManualTextSheet();
-
-  @override
-  State<_ManualTextSheet> createState() => _ManualTextSheetState();
-}
-
-class _ManualTextSheetState extends State<_ManualTextSheet> {
-  final _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final kb = MediaQuery.of(context).viewInsets.bottom;
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      child: Container(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        height: MediaQuery.of(context).size.height * 0.82 + kb,
-        padding: EdgeInsets.only(bottom: kb),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 10),
-            Center(
-              child: Container(
-                width: 40,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(100),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                'Type your grocery list',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: TextField(
-                  controller: _controller,
-                  autofocus: true,
-                  maxLines: null,
-                  textInputAction: TextInputAction.newline,
-                  decoration: InputDecoration(
-                    hintText: 'One item per line (e.g., Milk 2L, Eggs 12 pcs)',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: FilledButton.icon(
-                icon: const Icon(Icons.check_rounded),
-                label: const Text('Create list'),
-                onPressed: () {
-                  final text = _controller.text.trim();
-                  final rows = parseNoteText(text);
-                  Navigator.of(context).pop<List<ParsedRow>>(rows);
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ===================== Small UI helpers ======================================
-
-// Flexible pill that fills the space given by Expanded — no hard widths.
+// ---------------- Small UI helper: pill chip (two-state) ----------------
 class _SegmentChipFlex extends StatelessWidget {
   const _SegmentChipFlex({
     required this.height,
@@ -711,9 +615,7 @@ class _SegmentChipFlex extends StatelessWidget {
             color: bg,
             borderRadius: BorderRadius.circular(40),
             border: Border.all(
-              color: selected
-                  ? Colors.transparent
-                  : Colors.black.withValues(alpha: 0.22),
+              color: selected ? Colors.transparent : Colors.black.withValues(alpha: 0.22),
               width: 1.0,
             ),
           ),
@@ -743,3 +645,4 @@ class _SegmentChipFlex extends StatelessWidget {
     );
   }
 }
+
