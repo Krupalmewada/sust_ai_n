@@ -25,37 +25,35 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
   @override
   void initState() {
     super.initState();
-    _fetchInventoryItems();
+    _listenToInventoryChanges(); // 👈 Live updates from Firestore
   }
 
-  /// 🔹 Fetch inventory items from Firestore
-  Future<void> _fetchInventoryItems() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) throw Exception('User not logged in');
+  /// 🔹 Real-time listener for Firestore inventory
+  void _listenToInventoryChanges() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
-      final ref = FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('inventory');
-
-      final snapshot = await ref.get();
-
-      final items = snapshot.docs
+    FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('inventory')
+        .snapshots()
+        .listen((snapshot) {
+      final updatedItems = snapshot.docs
           .map((doc) => doc['name']?.toString() ?? '')
           .where((name) => name.isNotEmpty)
           .toList();
 
       setState(() {
-        _inventoryItems = items;
+        _inventoryItems = updatedItems;
         _isLoadingInventory = false;
       });
 
-      debugPrint('🧾 Loaded inventory items: $_inventoryItems');
-    } catch (e) {
-      debugPrint('❌ Failed to fetch inventory: $e');
-      setState(() => _isLoadingInventory = false);
-    }
+      // 🔁 Refresh recipes if user is on recipes tab
+      if (_selectedTabIndex == 0) {
+        recipesPageKey.currentState?.refreshWithNewInventory(updatedItems);
+      }
+    });
   }
 
   @override
@@ -110,7 +108,6 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
                     child: TextField(
                       controller: _searchController,
                       onChanged: (value) {
-                        // Send search input dynamically to recipes page only
                         if (_selectedTabIndex == 0) {
                           recipesPageKey.currentState
                               ?.searchRecipes(value.trim());
@@ -123,7 +120,8 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
                             ? "Search grocery list"
                             : "Search categories",
                         border: InputBorder.none,
-                        hintStyle: const TextStyle(color: Colors.grey),
+                        hintStyle:
+                        const TextStyle(color: Colors.grey),
                       ),
                     ),
                   ),
@@ -173,6 +171,8 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
         onTap: (index) {
           if (index == 0) {
             Navigator.pushNamed(context, '/inventory');
+          } else if (index == 2) {
+            Navigator.pushNamed(context, '/scan'); // 👈 camera page
           } else if (index == 3) {
             Navigator.pushNamed(context, '/profile');
           }
@@ -200,4 +200,3 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
 
 // Global key to access RecipesPage state
 final GlobalKey<RecipesPageState> recipesPageKey = GlobalKey<RecipesPageState>();
-

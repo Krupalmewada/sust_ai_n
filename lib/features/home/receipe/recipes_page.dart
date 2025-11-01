@@ -24,7 +24,13 @@ class RecipesPageState extends State<RecipesPage> {
     _fetchRecipes(widget.inventoryItems);
   }
 
-  // ✅ FIXED — only one _fetchRecipes() definition
+  /// 🔄 Called externally when Firestore inventory changes
+  void refreshWithNewInventory(List<String> updatedItems) {
+    if (!mounted) return;
+    debugPrint('♻️ Inventory updated: ${updatedItems.length} items');
+    _fetchRecipes(updatedItems);
+  }
+
   Future<void> _fetchRecipes(List<String> ingredients) async {
     if (ingredients.isEmpty) return;
     setState(() => _isLoading = true);
@@ -123,7 +129,7 @@ class RecipesPageState extends State<RecipesPage> {
     }
   }
 
-  // 🔍 From ReceipeBasePage
+  // 🔍 Called from ReceipeBasePage search bar
   void searchRecipes(String query) {
     if (query.isEmpty) {
       _fetchRecipes(widget.inventoryItems);
