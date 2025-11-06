@@ -25,7 +25,8 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
   @override
   void initState() {
     super.initState();
-    _listenToInventoryChanges(); // 👈 Live updates from Firestore
+    _searchController.addListener(() => setState(() {})); // refresh ❌ visibility
+    _listenToInventoryChanges();
   }
 
   /// 🔹 Real-time listener for Firestore inventory
@@ -108,10 +109,16 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
                     child: TextField(
                       controller: _searchController,
                       onChanged: (value) {
+                        final query = value.trim();
+
                         if (_selectedTabIndex == 0) {
                           recipesPageKey.currentState
-                              ?.searchRecipes(value.trim());
+                              ?.searchRecipes(query);
+                        } else if (_selectedTabIndex == 1) {
+                          groceryListPageKey.currentState
+                              ?.searchGrocery(query);
                         }
+                        setState(() {}); // Refresh ❌ visibility
                       },
                       decoration: InputDecoration(
                         hintText: _selectedTabIndex == 0
@@ -125,6 +132,22 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
                       ),
                     ),
                   ),
+                  // ❌ Clear button (visible only when text exists)
+                  if (_searchController.text.isNotEmpty)
+                    GestureDetector(
+                      onTap: () {
+                        _searchController.clear();
+
+                        if (_selectedTabIndex == 0) {
+                          recipesPageKey.currentState?.clearSearch();
+                        } else if (_selectedTabIndex == 1) {
+                          groceryListPageKey.currentState?.clearSearch();
+                        }
+
+                        setState(() {});
+                      },
+                      child: const Icon(Icons.close, color: Colors.grey),
+                    ),
                 ],
               ),
             ),
@@ -148,19 +171,45 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
             InventoryTabSelector(
               selectedIndex: _selectedTabIndex,
               onTabSelected: (index) {
-                setState(() => _selectedTabIndex = index);
+                setState(() {
+                  _selectedTabIndex = index;
+                  _searchController.clear();
+
+                  // Reset searches for all tabs when switching
+                  if (index == 0) {
+                    recipesPageKey.currentState?.clearSearch();
+                  } else if (index == 1) {
+                    groceryListPageKey.currentState?.clearSearch();
+                  }
+                });
               },
             ),
 
             SizedBox(height: height * 0.02),
 
             // 🧩 Dynamic Content
+            // Expanded(
+            //   child: AnimatedSwitcher(
+            //     duration: const Duration(milliseconds: 300),
+            //     child: _buildCurrentView(),
+            //   ),
+            // ),
             Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                child: _buildCurrentView(),
+              child: IndexedStack(
+                index: _selectedTabIndex,
+                children: [
+                  RecipesPage(
+                    key: recipesPageKey,
+                    inventoryItems: _inventoryItems,
+                  ),
+                  GroceryListPage(
+                    key: groceryListPageKey,
+                  ),
+                  const CategoriesPage(),
+                ],
               ),
             ),
+
           ],
         ),
       ),
@@ -190,7 +239,7 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
           inventoryItems: _inventoryItems,
         );
       case 1:
-        return const GroceryListPage();
+        return GroceryListPage(key: groceryListPageKey);
       case 2:
       default:
         return const CategoriesPage();
@@ -198,5 +247,7 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
   }
 }
 
-// Global key to access RecipesPage state
+// 🌍 Global keys for state access
 final GlobalKey<RecipesPageState> recipesPageKey = GlobalKey<RecipesPageState>();
+final GlobalKey<GroceryListPageState> groceryListPageKey =
+GlobalKey<GroceryListPageState>();

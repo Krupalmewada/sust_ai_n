@@ -6,19 +6,20 @@ import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:camera/camera.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:sust_ai_n/features/ocr_scan/presentation/widgets/Back_Button.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../services/inventory_service.dart';
 import '../../domain/cloud_vision_service.dart';
 import '../../domain/image_preprocess.dart';
 import '../../domain/parse_receipt_text.dart';
 import '../../domain/parsed_row.dart';
+ // 🔹 integrates your Firestore + category logic
 
-enum ScanMode { receipt, note, text }
+enum ScanMode { receipt, note }
 
 const String _visionApiKey =
 String.fromEnvironment('VISION_API_KEY', defaultValue: '');
@@ -36,6 +37,7 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
   ScanMode _mode = ScanMode.receipt;
 
   final _vision = CloudVisionService(apiKey: _visionApiKey);
+  final _inventoryService = InventoryService();
 
   @override
   void initState() {
@@ -71,7 +73,7 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
       );
       final controller = CameraController(
         rear,
-        ResolutionPreset.max,
+        ResolutionPreset.high,
         imageFormatGroup: ImageFormatGroup.jpeg,
         enableAudio: false,
       );
@@ -81,7 +83,6 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
       setState(() {
         _cam = controller;
         _initializing = false;
-        _flashOn = false;
       });
     } catch (_) {
       if (!mounted) return;
@@ -99,10 +100,6 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
   }
 
   Future<void> _onShutter() async {
-    if (_mode == ScanMode.text) {
-      _openTextComposer();
-      return;
-    }
     final cam = _cam;
     if (cam == null || !cam.value.isInitialized || cam.value.isTakingPicture) {
       return;
@@ -110,28 +107,18 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
     try {
       final shot = await cam.takePicture();
       if (!mounted) return;
-      _openResultSheet(imageFile: File(shot.path));
+      _openResultSheet(File(shot.path));
     } catch (_) {}
   }
 
   Future<void> _onPickFromGallery() async {
     final picker = ImagePicker();
-    final img =
-    await picker.pickImage(source: ImageSource.gallery, imageQuality: 92);
+    final img = await picker.pickImage(source: ImageSource.gallery, imageQuality: 92);
     if (img == null || !mounted) return;
-    _openResultSheet(imageFile: File(img.path));
+    _openResultSheet(File(img.path));
   }
 
-  void _openTextComposer() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const _ManualTextSheet(),
-    );
-  }
-
-  void _openResultSheet({required File imageFile}) {
+  void _openResultSheet(File imageFile) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -140,221 +127,125 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
         imageFile: imageFile,
         mode: _mode,
         vision: _vision,
+        inventoryService: _inventoryService, // 🔹 Firestore integration here
       ),
     );
   }
 
-  // ----------------------------- UI ------------------------------------------
-
-  @override
-  // Widget build(BuildContext context) {
-  //   return Scaffold(
-  //     backgroundColor: Colors.black,
-  //     body: Stack(
-  //       fit: StackFit.expand,
-  //       children: [
-  //         _buildCamera(),
-  //         // 🔙 Back button at top-left
-  //         Positioned(
-  //           top: 16,
-  //           left: 12,
-  //           child: SafeArea(
-  //             child: _CircleGlassButton(
-  //               icon: Icons.arrow_back_ios_new_rounded,
-  //               onTap: () => Navigator.of(context).pop(),
-  //             ),
-  //           ),
-  //         ),
-  //         Positioned(top: 16, left: 0, right: 0, child: _buildTopRibbon()),
-  //         Positioned(bottom: 26, left: 0, right: 0, child: _buildBottomBar()),
-  //       ],
-  //     ),
-  //   );
-  // }
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    final topInset = MediaQuery.of(context).padding.top;
-    final horizontalPadding = size.width * 0.03; // ~3% of width
-    final verticalGap = size.height * 0.01; // ~1% of height
-
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          _initializing
+              ? const Center(child: CircularProgressIndicator(color: Colors.white))
+              : _cam == null
+              ? const SizedBox.shrink()
+              : CameraPreview(_cam!),
+          Positioned(top: 16, left: 0, right: 0, child: _buildTopRibbon(context)),
+          Positioned(bottom: 26, left: 0, right: 0, child: _buildBottomBar()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTopRibbon(BuildContext context) {
+    return SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 🔙 Back button (dynamically padded)
-            Padding(
-              padding: EdgeInsets.only(
-                left: horizontalPadding,
-                top: topInset * 0.2, // slightly below status bar
-              ),
-              child: const BackButtonGlass(),
-            ),
-
-            // 🧾 Tabs ribbon (Receipt / Grocery List / Text)
-            Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: horizontalPadding,
-                vertical: verticalGap,
-              ),
-              child: _buildTopRibbon(),
-            ),
-
-            // 📷 Camera Preview + Bottom Bar expands
-            Expanded(
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  _buildCamera(),
-                  Align(
-                    alignment: Alignment.bottomCenter,
-                    child: Padding(
-                      padding: EdgeInsets.only(
-                        bottom: size.height * 0.02, // dynamic bottom spacing
-                      ),
-                      child: _buildBottomBar(),
+            // 🔹 Back button (top row)
+            ClipOval(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                child: Material(
+                  color: Colors.black.withOpacity(0.3),
+                  child: InkWell(
+                    onTap: () => Navigator.pop(context),
+                    customBorder: const CircleBorder(),
+                    child: const SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: Icon(Icons.arrow_back_ios_new_rounded,
+                          color: Colors.white, size: 20),
                     ),
                   ),
-                ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // 🔹 Mode chips below back button
+            ClipRRect(
+              borderRadius: BorderRadius.circular(40),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(40),
+                    border: Border.all(color: Colors.white.withOpacity(0.2)),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _SegmentChip(
+                          label: 'Receipt',
+                          icon: Icons.receipt_long_rounded,
+                          selected: _mode == ScanMode.receipt,
+                          onTap: () => setState(() => _mode = ScanMode.receipt),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _SegmentChip(
+                          label: 'Grocery List',
+                          icon: Icons.playlist_add_check_rounded,
+                          selected: _mode == ScanMode.note,
+                          onTap: () => setState(() => _mode = ScanMode.note),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ],
         ),
       ),
     );
-
   }
 
-  Widget _buildCamera() {
-    if (_initializing) {
-      return const Center(
-        child: CircularProgressIndicator(color: Colors.white),
-      );
-    }
-    final cam = _cam;
-    if (cam == null || !cam.value.isInitialized) {
-      return const SizedBox.expand();
-    }
-    final ps = cam.value.previewSize;
-    if (ps == null) return CameraPreview(cam);
-
-    // Fill portrait without letterboxing.
-    final previewW = ps.height;
-    final previewH = ps.width;
-    return FittedBox(
-      fit: BoxFit.cover,
-      alignment: Alignment.center,
-      child:
-      SizedBox(width: previewW, height: previewH, child: CameraPreview(cam)),
-    );
-  }
-
-  // ---------- TOP RIBBON (reference-matched, no overflow) ----------
-  Widget _buildTopRibbon() {
-    const double chipHeight = 36.0;
-    const double gap = 6.0;
-
-    return SafeArea(
-      bottom: false,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(48),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(48),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.max,
-                children: [
-                  Expanded(
-                    flex: 29,
-                    child: _SegmentChipFlex(
-                      height: chipHeight,
-                      label: 'Receipt',
-                      icon: Icons.receipt_long_rounded,
-                      selected: _mode == ScanMode.receipt,
-                      onTap: () => setState(() => _mode = ScanMode.receipt),
-                    ),
-                  ),
-                  const SizedBox(width: gap),
-                  Expanded(
-                    flex: 42, // slightly wider center like the reference
-                    child: _SegmentChipFlex(
-                      height: chipHeight,
-                      label: 'Grocery List',
-                      icon: Icons.playlist_add_check_rounded,
-                      selected: _mode == ScanMode.note,
-                      onTap: () => setState(() => _mode = ScanMode.note),
-                    ),
-                  ),
-                  const SizedBox(width: gap),
-                  Expanded(
-                    flex: 29,
-                    child: _SegmentChipFlex(
-                      height: chipHeight,
-                      label: 'Text',
-                      icon: Icons.subject_rounded,
-                      selected: _mode == ScanMode.text,
-                      onTap: () => setState(() => _mode = ScanMode.text),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildBottomBar() {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _CircleGlassButton(
-              icon: Icons.photo_library_rounded,
-              onTap: _onPickFromGallery,
-            ),
-            // Center shutter with camera icon
-            SizedBox(
-              width: 88,
-              height: 88,
-              child: InkResponse(
-                radius: 56,
-                highlightShape: BoxShape.circle,
-                onTap: _onShutter,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.18),
-                        blurRadius: 24,
-                        offset: const Offset(0, 10),
-                      ),
-                    ],
-                  ),
-                  child: const Center(
-                    child: Icon(Icons.camera_alt_rounded,
-                        size: 34, color: Colors.black87),
-                  ),
+            _GlassButton(icon: Icons.photo_library_rounded, onTap: _onPickFromGallery),
+            GestureDetector(
+              onTap: _onShutter,
+              child: Container(
+                width: 88,
+                height: 88,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
                 ),
+                child: const Icon(Icons.camera_alt_rounded, size: 34, color: Colors.black),
               ),
             ),
-            _CircleGlassButton(
+            _GlassButton(
               icon: _flashOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
               onTap: _toggleFlash,
             ),
@@ -365,31 +256,21 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
   }
 }
 
-class _CircleGlassButton extends StatelessWidget {
-  const _CircleGlassButton({required this.icon, required this.onTap});
-
+class _GlassButton extends StatelessWidget {
+  const _GlassButton({required this.icon, required this.onTap});
   final IconData icon;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(40),
+    return ClipOval(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
         child: Material(
-          color: Colors.black.withValues(alpha: 0.30),
-          shape: const CircleBorder(),
+          color: Colors.black26,
           child: InkWell(
-            customBorder: const CircleBorder(),
             onTap: onTap,
-            child: SizedBox(
-              width: 72,
-              height: 72,
-              child: Center(
-                child: Icon(icon, size: 26, color: Colors.white),
-              ),
-            ),
+            child: SizedBox(width: 72, height: 72, child: Icon(icon, color: Colors.white)),
           ),
         ),
       ),
@@ -397,42 +278,68 @@ class _CircleGlassButton extends StatelessWidget {
   }
 }
 
-// ====================== Result Sheet (list-only UI) ===========================
+class _SegmentChip extends StatelessWidget {
+  const _SegmentChip({required this.label, required this.icon, required this.selected, required this.onTap});
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? Colors.black : Colors.white,
+      borderRadius: BorderRadius.circular(40),
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 16, color: selected ? Colors.white : Colors.black),
+              const SizedBox(width: 6),
+              Text(label,
+                  style: TextStyle(
+                    color: selected ? Colors.white : Colors.black,
+                    fontWeight: FontWeight.w600,
+                  )),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ====================== Result Sheet (Firestore integrated) ===========================
 
 class _ResultSheet extends StatefulWidget {
   const _ResultSheet({
     required this.imageFile,
     required this.mode,
     required this.vision,
+    required this.inventoryService,
   });
 
   final File imageFile;
   final ScanMode mode;
   final CloudVisionService vision;
+  final InventoryService inventoryService;
 
   @override
   State<_ResultSheet> createState() => _ResultSheetState();
 }
 
-class _ParsedBundle {
-  _ParsedBundle({
-    required this.rawText,
-    required this.items,
-  });
-  final String rawText;
-  final List<ParsedRow> items;
-}
-
 class _ResultSheetState extends State<_ResultSheet> {
   late Future<_ParsedBundle> _future;
-
-  final TextRecognizer _localOcr =
-  TextRecognizer(script: TextRecognitionScript.latin);
+  final TextRecognizer _localOcr = TextRecognizer(script: TextRecognitionScript.latin);
 
   @override
   void initState() {
     super.initState();
-    _future = _compute();
+    _future = _processImage();
   }
 
   @override
@@ -441,429 +348,212 @@ class _ResultSheetState extends State<_ResultSheet> {
     super.dispose();
   }
 
-  Future<String> _ocrLocal(String imagePath) async {
-    final input = InputImage.fromFilePath(imagePath);
-    final result = await _localOcr.processImage(input);
-    return result.text;
-  }
-
-  Future<String> _visionFirstThenLocal({
-    required Uint8List preparedBytes,
-    required String originalPath,
-  }) async {
-    String text = '';
-    if (_visionApiKey.isNotEmpty) {
-      try {
-        text = await widget.vision.ocrBytes(preparedBytes) ?? '';
-      } catch (_) {}
-    }
-    if (text.trim().isEmpty) {
-      try {
-        text = await _ocrLocal(originalPath);
-      } catch (_) {}
-    }
-    return text.trim();
-  }
-
-  Future<_ParsedBundle> _compute() async {
+  Future<_ParsedBundle> _processImage() async {
     final path = widget.imageFile.path;
-
-    switch (widget.mode) {
-      case ScanMode.receipt:
-        Uint8List? prep = await preprocessForOcr(path);
-        prep ??= await File(path).readAsBytes();
-        final text =
-        await _visionFirstThenLocal(preparedBytes: prep, originalPath: path);
-        final rows = parseReceiptText(text);
-
-        debugPrint('==== OCR RAW (<=600 chars) ====\n'
-            '${text.substring(0, text.length.clamp(0, 600))}');
-        debugPrint('==== PARSED (${rows.length}) ====');
-        for (final r in rows) {
-          debugPrint('- ${r.name} ${r.qty} ${r.unit}');
-        }
-
-        return _ParsedBundle(rawText: text, items: rows);
-
-      case ScanMode.note:
-        final maybe = await preprocessForOcr(path);
-        final byts = maybe ?? await File(path).readAsBytes();
-        final text =
-        await _visionFirstThenLocal(preparedBytes: byts, originalPath: path);
-        final rows = parseNoteText(text);
-
-        debugPrint('==== OCR RAW (<=600 chars) ====\n'
-            '${text.substring(0, text.length.clamp(0, 600))}');
-        debugPrint('==== PARSED (${rows.length}) ====');
-        for (final r in rows) {
-          debugPrint('- ${r.name} ${r.qty} ${r.unit}');
-        }
-
-        return _ParsedBundle(rawText: text, items: rows);
-
-      case ScanMode.text:
-        return _ParsedBundle(rawText: '', items: const []);
-    }
-  }
-
-  void _onAddToInventory(_ParsedBundle b) async {
+    Uint8List? prep = await preprocessForOcr(path);
+    prep ??= await File(path).readAsBytes();
+    String text = '';
     try {
-      final service = InventoryService();
+      text = await widget.vision.ocrBytes(prep) ?? '';
+    } catch (_) {}
+    if (text.isEmpty) text = (await _localOcr.processImage(InputImage.fromFilePath(path))).text;
+    final rows = widget.mode == ScanMode.receipt ? parseReceiptText(text) : parseNoteText(text);
+    return _ParsedBundle(rawText: text, items: rows);
+  }
 
-      // Convert ParsedRow objects into Firestore-ready maps
-      final items = b.items.map((it) {
-        return {
-          'name': it.name.trim(),
-          'qty': it.qty,
-          'unit': it.unit,
-          'category': _guessCategory(it.name),
-          'expiryDate': Timestamp.fromDate(
-            DateTime.now().add(const Duration(days: 7)), // default 1-week expiry
-          ),
-          'sourceType': 'Scan',
-        };
-      }).toList();
-
-      await service.addItems(items);
-
-      if (!mounted) return;
-      Navigator.of(context).pop(); // close bottom sheet
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Items added to your inventory'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+  Future<void> _onAddToInventory(_ParsedBundle bundle) async {
+    try {
+      for (final it in bundle.items) {
+        await widget.inventoryService.addItem(
+          name: it.name,
+          qty: it.qty,
+          unit: it.unit,
+          expiryDate: DateTime.now().add(const Duration(days: 7)),
+          sourceType: 'Scan',
+        );
+      }
+      if (mounted) {
+        Navigator.pop(context, true); // ✅ send "success" flag when closing the sheet
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✅ Items added to inventory')),
+        );
+      }
     } catch (e) {
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ Failed to add items: $e'),
-          behavior: SnackBarBehavior.floating,
-        ),
+        SnackBar(content: Text('❌ Error adding items: $e')),
       );
     }
   }
 
-  /// Simple category guesser (optional helper)
-  String _guessCategory(String name) {
-    final lower = name.toLowerCase();
-    if (lower.contains('milk') ||
-        lower.contains('cheese') ||
-        lower.contains('yogurt')) return 'Dairy';
-    if (lower.contains('apple') ||
-        lower.contains('banana') ||
-        lower.contains('fruit')) return 'Produce';
-    if (lower.contains('chicken') ||
-        lower.contains('meat') ||
-        lower.contains('fish')) return 'Meat';
-    if (lower.contains('bread') ||
-        lower.contains('rice') ||
-        lower.contains('flour') ||
-        lower.contains('pasta')) return 'Grains';
-    if (lower.contains('juice') ||
-        lower.contains('soda') ||
-        lower.contains('water')) return 'Beverages';
-    return 'Uncategorized';
-  }
-
-
   @override
   Widget build(BuildContext context) {
-    final bg = Theme.of(context).scaffoldBackgroundColor;
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      child: Container(
-        color: bg,
-        height: MediaQuery.of(context).size.height * 0.82,
-        child: FutureBuilder<_ParsedBundle>(
-          future: _future,
-          builder: (_, snap) {
-            if (snap.hasError) {
-              return Center(child: Text('Error: ${snap.error}'));
-            }
-            if (!snap.hasData) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            final b = snap.data!;
-            return Column(
-              children: [
-                const SizedBox(height: 12),
-                Container(
-                  width: 40,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(100),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Expanded(child: _buildList(b)),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.camera_alt_rounded),
-                          label: const Text('Retake photo'),
-                          onPressed: () => Navigator.of(context).pop(),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: FilledButton.icon(
-                          icon: const Icon(Icons.playlist_add_check_rounded),
-                          label: const Text('Add to inventory'),
-                          onPressed: () => _onAddToInventory(b),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildList(_ParsedBundle b) {
-    final items = b.items;
-    return GestureDetector(
-      onTap: () => FocusScope.of(context).unfocus(),
-      child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-        itemCount: items.length,
-        itemBuilder: (_, i) {
-          final it = items[i];
-          return Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: Colors.black.withValues(alpha: 0.07)),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      initialValue: it.name,
-                      decoration: const InputDecoration(
-                        labelText: 'Item name',
-                        border: InputBorder.none,
-                      ),
-                      onChanged: (v) => it.name = v,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  SizedBox(
-                    width: 64,
-                    child: TextFormField(
-                      initialValue: it.qty.toString(),
-                      keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true),
-                      decoration: const InputDecoration(
-                        labelText: 'Qty',
-                        border: InputBorder.none,
-                      ),
-                      onChanged: (v) {
-                        final n = double.tryParse(v.replaceAll(',', '.'));
-                        if (n != null) it.qty = n;
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  DropdownButton<String>(
-                    value: it.unit,
-                    underline: const SizedBox.shrink(),
-                    items: const [
-                      DropdownMenuItem(value: 'pcs', child: Text('pcs')),
-                      DropdownMenuItem(value: 'kg', child: Text('kg')),
-                      DropdownMenuItem(value: 'g', child: Text('g')),
-                      DropdownMenuItem(value: 'lb', child: Text('lb')),
-                      DropdownMenuItem(value: 'oz', child: Text('oz')),
-                      DropdownMenuItem(value: 'L', child: Text('L')),
-                      DropdownMenuItem(value: 'ml', child: Text('ml')),
-                      DropdownMenuItem(value: 'pack', child: Text('pack')),
-                    ],
-                    onChanged: (v) {
-                      if (v != null) setState(() => it.unit = v);
-                    },
-                  ),
-                  IconButton(
-                    tooltip: 'Remove',
-                    icon: const Icon(Icons.delete_outline),
-                    onPressed: () {
-                      setState(() => items.removeAt(i));
-                      FocusScope.of(context).unfocus();
-                    },
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-// ==================== Manual TEXT composer ===================================
-
-class _ManualTextSheet extends StatefulWidget {
-  const _ManualTextSheet();
-
-  @override
-  State<_ManualTextSheet> createState() => _ManualTextSheetState();
-}
-
-class _ManualTextSheetState extends State<_ManualTextSheet> {
-  final _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final kb = MediaQuery.of(context).viewInsets.bottom;
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      child: Container(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        height: MediaQuery.of(context).size.height * 0.82 + kb,
-        padding: EdgeInsets.only(bottom: kb),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 10),
-            Center(
-              child: Container(
+    return FutureBuilder<_ParsedBundle>(
+      future: _future,
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snap.hasError) {
+          return Center(child: Text('Error: ${snap.error}'));
+        }
+        final bundle = snap.data!;
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.82,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 8),
+              Container(
                 width: 40,
                 height: 5,
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.12),
+                  color: Colors.black.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(100),
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                'Type your grocery list',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: Padding(
+              const SizedBox(height: 8),
+
+              // 🔹 Add Item button
+              Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: TextField(
-                  controller: _controller,
-                  autofocus: true,
-                  maxLines: null,
-                  textInputAction: TextInputAction.newline,
-                  decoration: InputDecoration(
-                    hintText: 'One item per line (e.g., Milk 2L, Eggs 12 pcs)',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    icon: const Icon(Icons.add_circle_outline_rounded),
+                    label: const Text('Add item'),
+                    onPressed: () {
+                      setState(() {
+                        bundle.items.add(ParsedRow(name: '', qty: 1, unit: 'pcs'));
+                      });
+                    },
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: FilledButton.icon(
-                icon: const Icon(Icons.check_rounded),
-                label: const Text('Create list'),
-                onPressed: () {
-                  final text = _controller.text.trim();
-                  final rows = parseNoteText(text);
-                  Navigator.of(context).pop<List<ParsedRow>>(rows);
-                },
+
+              // 🔹 Editable list
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  itemCount: bundle.items.length,
+                  itemBuilder: (_, i) {
+                    final it = bundle.items[i];
+                    return Card(
+                      key: ValueKey(it),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(color: Colors.black.withOpacity(0.07)),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          children: [
+                            // 📝 Item name
+                            Expanded(
+                              child: TextFormField(
+                                initialValue: it.name,
+                                decoration: const InputDecoration(
+                                  labelText: 'Item name',
+                                  border: InputBorder.none,
+                                ),
+                                onChanged: (v) => it.name = v,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+
+                            // 🔢 Quantity
+                            SizedBox(
+                              width: 64,
+                              child: TextFormField(
+                                initialValue: it.qty.toString(),
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                decoration: const InputDecoration(
+                                  labelText: 'Qty',
+                                  border: InputBorder.none,
+                                ),
+                                onChanged: (v) {
+                                  final n = double.tryParse(v.replaceAll(',', '.'));
+                                  if (n != null) it.qty = n;
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+
+                            // 📏 Unit dropdown
+                            DropdownButton<String>(
+                              value: it.unit,
+                              underline: const SizedBox.shrink(),
+                              items: const [
+                                DropdownMenuItem(value: 'pcs', child: Text('pcs')),
+                                DropdownMenuItem(value: 'kg', child: Text('kg')),
+                                DropdownMenuItem(value: 'g', child: Text('g')),
+                                DropdownMenuItem(value: 'lb', child: Text('lb')),
+                                DropdownMenuItem(value: 'oz', child: Text('oz')),
+                                DropdownMenuItem(value: 'L', child: Text('L')),
+                                DropdownMenuItem(value: 'ml', child: Text('ml')),
+                                DropdownMenuItem(value: 'pack', child: Text('pack')),
+                              ],
+                              onChanged: (v) {
+                                if (v != null) setState(() => it.unit = v);
+                              },
+                            ),
+
+                            // 🗑 Delete icon
+                            IconButton(
+                              tooltip: 'Remove item',
+                              icon: const Icon(Icons.delete_outline),
+                              onPressed: () {
+                                setState(() {
+                                  bundle.items.remove(it);
+                                });
+                                FocusScope.of(context).unfocus();
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
-// ===================== Small UI helpers ======================================
-
-// Flexible pill that fills the space given by Expanded — no hard widths.
-class _SegmentChipFlex extends StatelessWidget {
-  const _SegmentChipFlex({
-    required this.height,
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final double height;
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final Color bg = selected ? Colors.black : Colors.white;
-    final Color fg = selected ? Colors.white : Colors.black87;
-
-    return Material(
-      color: bg,
-      borderRadius: BorderRadius.circular(40),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          height: height,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(40),
-            border: Border.all(
-              color: selected
-                  ? Colors.transparent
-                  : Colors.black.withValues(alpha: 0.22),
-              width: 1.0,
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 16, color: fg),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: fg,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                    letterSpacing: .1,
-                  ),
+              // 🔹 Action buttons (Retake / Add to Inventory)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.camera_alt_rounded),
+                        label: const Text('Retake Photo'),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton.icon(
+                        icon: const Icon(Icons.playlist_add_check_rounded),
+                        label: const Text('Add to Inventory'),
+                        onPressed: () => _onAddToInventory(bundle),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-        ),
-      ),
+        );
+      },
     );
-
   }
+}
+
+
+class _ParsedBundle {
+  _ParsedBundle({required this.rawText, required this.items});
+  final String rawText;
+  final List<ParsedRow> items;
 }

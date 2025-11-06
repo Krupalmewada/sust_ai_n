@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 
 class InventoryService {
-  static const String _apiKey = '80c1041e2fb84b6389d2ba69fa7c1f3f';
+  static const String _apiKey = '**';
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
@@ -187,4 +187,25 @@ class InventoryService {
       await doc.reference.delete();
     }
   }
+  /// 🔹 Fetch all inventory item names (for recipe refresh)
+  Future<List<String>> fetchInventoryItems() async {
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('User not signed in');
+
+    final snapshot = await _firestore
+        .collection('users')
+        .doc(user.uid)
+        .collection('inventory')
+        .get();
+
+    // Return only item names as lowercase list
+    final items = snapshot.docs
+        .map((doc) => (doc.data()['name'] ?? '').toString().trim().toLowerCase())
+        .where((name) => name.isNotEmpty)
+        .toList();
+
+    debugPrint('📦 Loaded ${items.length} items from inventory.');
+    return items;
+  }
+
 }

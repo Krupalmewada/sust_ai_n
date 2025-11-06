@@ -30,7 +30,7 @@ class InventoryTab extends StatelessWidget {
                   children: [
                     Flexible(
                       child: Text(
-                        "Hi Alex,\nHere’s what you have!",
+                        "Hi Krupal,\nHere’s what you have!",
                         style: TextStyle(
                           fontSize: width * 0.055,
                           fontWeight: FontWeight.w600,

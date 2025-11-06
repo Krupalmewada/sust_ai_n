@@ -19,6 +19,7 @@ Future<void> main() async {
   );
   runApp(const MyApp());
 }
+final RouteObserver<ModalRoute<void>> routeObserver = RouteObserver<ModalRoute<void>>();
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -33,6 +34,9 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         scaffoldBackgroundColor: Colors.white,
       ),
+
+      // ✅ Inject RouteObserver globally
+      navigatorObservers: [routeObserver],
 
       // ✅ Listen to FirebaseAuth state to decide start page
       home: StreamBuilder<User?>(
