@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:sust_ai_n/features/home/User_inventory/user_inventory_page.dart';
 import 'firebase_options.dart';
 
 // Import all feature screens
@@ -19,7 +20,9 @@ Future<void> main() async {
   );
   runApp(const MyApp());
 }
-final RouteObserver<ModalRoute<void>> routeObserver = RouteObserver<ModalRoute<void>>();
+
+final RouteObserver<ModalRoute<void>> routeObserver =
+RouteObserver<ModalRoute<void>>();
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -35,10 +38,9 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: Colors.white,
       ),
 
-      // ✅ Inject RouteObserver globally
       navigatorObservers: [routeObserver],
 
-      // ✅ Listen to FirebaseAuth state to decide start page
+      // ✅ Only InventoryTab handles BottomNav now
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {
@@ -47,20 +49,21 @@ class MyApp extends StatelessWidget {
               body: Center(child: CircularProgressIndicator()),
             );
           } else if (snapshot.hasData && snapshot.data != null) {
-            // User is logged in
-            return const InventoryTab();
+            // ✅ User logged in → go directly to InventoryTab
+            return const InventoryTab(); // your BottomNav lives here
           } else {
-            // User is not logged in
+            // 🚪 Not logged in → show login
             return const UserLogin();
           }
         },
       ),
 
-      // Named routes
+      // ✅ Named routes (unchanged)
       routes: {
         '/login': (context) => const UserLogin(),
         '/inventory': (context) => const InventoryTab(),
         '/scan': (context) => const ScanPage(),
+        '/userinventory': (context) => const UserInventoryPage(),
         '/recipes': (context) => const ReceipeBasePage(),
         '/recipesPage': (context) => const RecipesPage(inventoryItems: []),
         '/categories': (context) => const CategoriesPage(),

@@ -25,7 +25,7 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
   @override
   void initState() {
     super.initState();
-    _searchController.addListener(() => setState(() {})); // refresh ❌ visibility
+    _searchController.addListener(() => setState(() {}));
     _listenToInventoryChanges();
   }
 
@@ -50,7 +50,6 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
         _isLoadingInventory = false;
       });
 
-      // 🔁 Refresh recipes if user is on recipes tab
       if (_selectedTabIndex == 0) {
         recipesPageKey.currentState?.refreshWithNewInventory(updatedItems);
       }
@@ -67,6 +66,7 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
 
       // ---------- App Bar ----------
       appBar: AppBar(
+        automaticallyImplyLeading: false, // ✅ no back button
         backgroundColor: Colors.white,
         elevation: 0,
         title: Text(
@@ -118,7 +118,7 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
                           groceryListPageKey.currentState
                               ?.searchGrocery(query);
                         }
-                        setState(() {}); // Refresh ❌ visibility
+                        setState(() {});
                       },
                       decoration: InputDecoration(
                         hintText: _selectedTabIndex == 0
@@ -132,18 +132,15 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
                       ),
                     ),
                   ),
-                  // ❌ Clear button (visible only when text exists)
                   if (_searchController.text.isNotEmpty)
                     GestureDetector(
                       onTap: () {
                         _searchController.clear();
-
                         if (_selectedTabIndex == 0) {
                           recipesPageKey.currentState?.clearSearch();
                         } else if (_selectedTabIndex == 1) {
                           groceryListPageKey.currentState?.clearSearch();
                         }
-
                         setState(() {});
                       },
                       child: const Icon(Icons.close, color: Colors.grey),
@@ -151,7 +148,6 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
                 ],
               ),
             ),
-
             SizedBox(height: height * 0.03),
 
             // 📋 Section Heading
@@ -174,8 +170,6 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
                 setState(() {
                   _selectedTabIndex = index;
                   _searchController.clear();
-
-                  // Reset searches for all tabs when switching
                   if (index == 0) {
                     recipesPageKey.currentState?.clearSearch();
                   } else if (index == 1) {
@@ -184,16 +178,9 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
                 });
               },
             ),
-
             SizedBox(height: height * 0.02),
 
-            // 🧩 Dynamic Content
-            // Expanded(
-            //   child: AnimatedSwitcher(
-            //     duration: const Duration(milliseconds: 300),
-            //     child: _buildCurrentView(),
-            //   ),
-            // ),
+            // 🧩 Tabbed Content
             Expanded(
               child: IndexedStack(
                 index: _selectedTabIndex,
@@ -209,41 +196,26 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
                 ],
               ),
             ),
-
           ],
         ),
       ),
 
       // ---------- Bottom Navigation ----------
       bottomNavigationBar: BottomNavBar(
-        currentIndex: 1,
+        currentIndex: 1, // ✅ mark Recipes as active
         onTap: (index) {
           if (index == 0) {
             Navigator.pushNamed(context, '/inventory');
+          } else if (index == 1) {
+            // Already on recipes
           } else if (index == 2) {
-            Navigator.pushNamed(context, '/scan'); // 👈 camera page
+            Navigator.pushNamed(context, '/userinventory');
           } else if (index == 3) {
             Navigator.pushNamed(context, '/profile');
           }
         },
       ),
     );
-  }
-
-  // ---------- Tab Switcher ----------
-  Widget _buildCurrentView() {
-    switch (_selectedTabIndex) {
-      case 0:
-        return RecipesPage(
-          key: recipesPageKey,
-          inventoryItems: _inventoryItems,
-        );
-      case 1:
-        return GroceryListPage(key: groceryListPageKey);
-      case 2:
-      default:
-        return const CategoriesPage();
-    }
   }
 }
 

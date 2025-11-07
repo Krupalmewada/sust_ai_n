@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import '../features/ocr_scan/presentation/pages/scan_page.dart';
 
 class BottomNavBar extends StatelessWidget {
@@ -15,7 +14,7 @@ class BottomNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(left: 12, right: 12, bottom: 6), // outer spacing
+      margin: const EdgeInsets.only(left: 12, right: 12, bottom: 6),
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.only(
@@ -47,12 +46,17 @@ class BottomNavBar extends StatelessWidget {
                 isActive: currentIndex == 1,
                 onTap: () => onTap(1),
               ),
+
+              // ✅ The scan button stays independent
               const _ScannerIcon(),
+
+              // ✅ Inventory now correctly mapped to index 2
               _NavIcon(
-                icon: Icons.confirmation_number_outlined,
+                icon: Icons.inventory_2_outlined,
                 isActive: currentIndex == 2,
                 onTap: () => onTap(2),
               ),
+
               _NavIcon(
                 icon: Icons.person_outline,
                 isActive: currentIndex == 3,
@@ -91,6 +95,7 @@ class _NavIcon extends StatelessWidget {
   }
 }
 
+/// 🔹 Scanner Button – does not change currentIndex
 class _ScannerIcon extends StatelessWidget {
   const _ScannerIcon({super.key});
 

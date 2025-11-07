@@ -264,17 +264,20 @@ class InventoryTab extends StatelessWidget {
 
       //Bottom nav bar
       bottomNavigationBar: BottomNavBar(
-        currentIndex: 0, // 0 = Home
+        currentIndex: 0, // Highlight Home / InventoryTab as active
         onTap: (index) {
           if (index == 0) {
             // Already on InventoryTab
           } else if (index == 1) {
             Navigator.pushNamed(context, '/recipes');
+          } else if (index == 2) {
+            Navigator.pushNamed(context, '/userinventory');
           } else if (index == 3) {
             Navigator.pushNamed(context, '/profile');
           }
         },
       ),
+
 
 
 

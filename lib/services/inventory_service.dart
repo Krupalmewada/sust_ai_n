@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 
 class InventoryService {
-  static const String _apiKey = '**';
+  static const String _apiKey = '*';
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
@@ -97,13 +97,13 @@ class InventoryService {
       final searchRes = await http.get(searchUri);
       if (searchRes.statusCode != 200) {
         debugPrint('⚠️ Search failed (${searchRes.statusCode}) for $lowerName');
-        return {'category': 'general', 'aisle': 'general'};
+        return {'category': 'General', 'aisle': 'General'};
       }
 
       final searchData = json.decode(searchRes.body);
       if (searchData['results'] == null || searchData['results'].isEmpty) {
         debugPrint('⚠️ No search results for "$lowerName"');
-        return {'category': 'general', 'aisle': 'general'};
+        return {'category': 'General', 'aisle': 'General'};
       }
 
       final id = searchData['results'][0]['id'].toString();
@@ -117,35 +117,50 @@ class InventoryService {
       final infoRes = await http.get(infoUri);
       if (infoRes.statusCode != 200) {
         debugPrint('⚠️ Info lookup failed (${infoRes.statusCode}) for $lowerName');
-        return {'category': 'general', 'aisle': 'general'};
+        return {'category': 'General', 'aisle': 'General'};
       }
 
       final infoData = json.decode(infoRes.body);
 
-      // Extract aisle and categoryPath if available
-      final aisle =
-      (infoData['aisle'] ?? 'general').toString().trim().toLowerCase();
-      String category = 'general';
+      // 3️⃣ Extract aisle (formatted nicely)
+      final rawAisle = (infoData['aisle'] ?? '').toString().trim();
+      final aisle = rawAisle.isNotEmpty
+          ? _capitalize(rawAisle.split('/').last)
+          : 'General';
+
+      // 4️⃣ Extract MOST SPECIFIC category from categoryPath
+      String category = 'General';
       if (infoData['categoryPath'] != null &&
           infoData['categoryPath'] is List &&
           (infoData['categoryPath'] as List).isNotEmpty) {
-        category = (infoData['categoryPath'] as List)
-            .join(' > ')
-            .toString()
-            .trim()
-            .toLowerCase();
+        final List<dynamic> path = infoData['categoryPath'];
+        category = _capitalize(path.last.toString().trim());
+      } else if (rawAisle.isNotEmpty) {
+        category = _capitalize(rawAisle.split('/').last.trim());
       }
-
-      debugPrint('🔍 $lowerName → category: $category | aisle: $aisle');
 
       final result = {'category': category, 'aisle': aisle};
       _categoryCache[lowerName] = result;
+
+      debugPrint('🔍 $lowerName → category: $category | aisle: $aisle');
       return result;
     } catch (e) {
       debugPrint('❌ Spoonacular lookup failed for "$name": $e');
-      return {'category': 'general', 'aisle': 'general'};
+      return {'category': 'General', 'aisle': 'General'};
     }
   }
+
+  /// 🔤 Capitalize helper (e.g., "greek yogurts" → "Greek Yogurts")
+  String _capitalize(String value) {
+    if (value.isEmpty) return value;
+    return value
+        .split(' ')
+        .map((w) => w.isNotEmpty
+        ? w[0].toUpperCase() + w.substring(1).toLowerCase()
+        : '')
+        .join(' ');
+  }
+
 
   // 🔹 Stream inventory
   Stream<List<Map<String, dynamic>>> getItems() {

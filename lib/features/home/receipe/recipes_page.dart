@@ -18,7 +18,7 @@ class RecipesPageState extends State<RecipesPage> with RouteAware {
   bool _isLoading = false;
   List<Map<String, dynamic>> _recipes = [];
 
-  static const String _apiKey = '**';
+  static const String _apiKey = '*';
   static const String _baseUrl = 'https://api.spoonacular.com';
 
   @override
