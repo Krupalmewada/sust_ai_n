@@ -352,23 +352,35 @@ class _ResultSheetState extends State<_ResultSheet> {
     return result.text;
   }
 
-  Future<String> _visionFirstThenLocal({
+  // Local-first; Cloud Vision fallback (only if local returns empty)
+  Future<String> _localFirstThenVision({
     required Uint8List preparedBytes,
     required String originalPath,
   }) async {
-    String text = '';
+    try {
+      final local = await _ocrLocal(originalPath);
+      final trimmed = local.trim();
+      if (trimmed.isNotEmpty) return trimmed;
+    } catch (_) {}
+
     if (_visionApiKey.isNotEmpty) {
       try {
-        text = await widget.vision.ocrBytes(preparedBytes) ?? '';
+        final cloud = await widget.vision.ocrBytes(preparedBytes) ?? '';
+        if (cloud.trim().isNotEmpty) return cloud.trim();
       } catch (_) {}
     }
-    if (text.trim().isEmpty) {
-      try {
-        text = await _ocrLocal(originalPath);
-      } catch (_) {}
-    }
-    return text.trim();
+    return '';
   }
+
+  int _scoreOcr(String s) {
+    if (s.isEmpty) return 0;
+    // Count words that look like real items: only letters, length ≥ 3
+    final words = RegExp(r'[A-Za-z]{3,}').allMatches(s).length;
+    // Penalize obvious garbage characters
+    final garbage = RegExp(r'[|·••]+').allMatches(s).length;
+    return (words * 5) - (garbage * 3);
+  }
+
 
   Future<_ParsedBundle> _compute() async {
     final path = widget.imageFile.path;
@@ -377,9 +389,19 @@ class _ResultSheetState extends State<_ResultSheet> {
       case ScanMode.receipt:
         Uint8List? prep = await preprocessForOcr(path);
         prep ??= await File(path).readAsBytes();
-        final text =
-        await _visionFirstThenLocal(preparedBytes: prep, originalPath: path);
-        final rows = parseReceiptText(text);
+        final text = await _localFirstThenVision(
+          preparedBytes: prep,
+          originalPath: path,
+        );
+        final enriched = parseReceiptEnriched(text);
+        final rows = enriched.items;
+
+        debugPrint('==== MONEY ====');
+        debugPrint('Food spend: ${enriched.foodSpend.toStringAsFixed(2)}, '
+            'Non-food: ${enriched.nonFoodSpend.toStringAsFixed(2)}, '
+            'Subtotal: ${enriched.money.subtotal}, '
+            'Tax: ${enriched.money.tax}, '
+            'Total: ${enriched.money.total}');
 
         debugPrint('==== OCR RAW (<=600 chars) ====\n'
             '${text.substring(0, text.length.clamp(0, 600))}');
@@ -391,10 +413,58 @@ class _ResultSheetState extends State<_ResultSheet> {
         return _ParsedBundle(rawText: text, items: rows);
 
       case ScanMode.note:
-        final maybe = await preprocessForOcr(path);
-        final byts = maybe ?? await File(path).readAsBytes();
-        final text =
-        await _visionFirstThenLocal(preparedBytes: byts, originalPath: path);
+      // Pass A: adaptive threshold (great for handwriting)
+        final prepA = await preprocessForOcr(
+          path,
+          useAdaptiveThreshold: true,
+          useSharpen: true,
+          useMorphClose: false,
+        );
+
+        // Pass B: no adaptive, sharper edges (helps bold/thick strokes)
+        final prepB = await preprocessForOcr(
+          path,
+          useAdaptiveThreshold: false,
+          useSharpen: true,
+          unsharpAmount: 1.0,
+          useMorphClose: true, // connect strokes if thin
+        );
+
+        // OCR both (local-first), pick the one with better quality score
+        String textA = '';
+        String textB = '';
+        if (prepA != null) {
+          textA = await _localFirstThenVision(
+            preparedBytes: prepA,
+            originalPath: path,
+          );
+        }
+        if (prepB != null) {
+          textB = await _localFirstThenVision(
+            preparedBytes: prepB,
+            originalPath: path,
+          );
+        }
+
+        String text = textA;
+        int scoreA = _scoreOcr(textA);
+        int scoreB = _scoreOcr(textB);
+        if (scoreB > scoreA) {
+          text = textB;
+          scoreA = scoreB;
+        }
+
+        // If still very weak and cloud key exists, try cloud on the better prep
+        if (text.trim().isEmpty && _visionApiKey.isNotEmpty) {
+          final bytes = (scoreB > scoreA ? prepB : prepA) ?? prepA ?? prepB;
+          if (bytes != null) {
+            try {
+              final cloud = await widget.vision.ocrBytes(bytes) ?? '';
+              if (cloud.trim().isNotEmpty) text = cloud.trim();
+            } catch (_) {}
+          }
+        }
+
         final rows = parseNoteText(text);
 
         debugPrint('==== OCR RAW (<=600 chars) ====\n'
@@ -411,6 +481,7 @@ class _ResultSheetState extends State<_ResultSheet> {
   void _onAddToInventory(_ParsedBundle b) {
     debugPrint('=== ADD TO INVENTORY (${b.items.length}) ===');
     for (final it in b.items) {
+      it.normalize(); // enforce Title-Case + canonical unit before returning
       debugPrint('- ${it.name}  qty=${it.qty}  unit=${it.unit}');
     }
     Navigator.of(context).pop<List<ParsedRow>>(b.items);
@@ -552,7 +623,7 @@ class _ResultSheetState extends State<_ResultSheet> {
                       DropdownMenuItem(value: 'g', child: Text('g')),
                       DropdownMenuItem(value: 'lb', child: Text('lb')),
                       DropdownMenuItem(value: 'oz', child: Text('oz')),
-                      DropdownMenuItem(value: 'L', child: Text('L')),
+                      DropdownMenuItem(value: 'l', child: Text('l')),
                       DropdownMenuItem(value: 'ml', child: Text('ml')),
                       DropdownMenuItem(value: 'pack', child: Text('pack')),
                     ],
@@ -615,7 +686,9 @@ class _SegmentChipFlex extends StatelessWidget {
             color: bg,
             borderRadius: BorderRadius.circular(40),
             border: Border.all(
-              color: selected ? Colors.transparent : Colors.black.withValues(alpha: 0.22),
+              color: selected
+                  ? Colors.transparent
+                  : Colors.black.withValues(alpha: 0.22),
               width: 1.0,
             ),
           ),
@@ -645,4 +718,3 @@ class _SegmentChipFlex extends StatelessWidget {
     );
   }
 }
-
