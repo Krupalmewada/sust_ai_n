@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -14,6 +13,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'chat_service.dart';
 
 class ChatPage extends StatefulWidget {
@@ -38,7 +38,9 @@ class _ChatPageState extends State<ChatPage> {
   @override
   void initState() {
     super.initState();
-    _initializeUser();
+    _initializeUser().then((_) async {
+      await _loadSavedMessages(); // only load after user ready
+    });
   }
 
   Future<void> _initializeUser() async {
@@ -48,7 +50,6 @@ class _ChatPageState extends State<ChatPage> {
       if (currentUser != null) {
         final uid = currentUser.uid;
 
-        // Fetch user data from Firestore
         final userDoc = await FirebaseFirestore.instance
             .collection('users')
             .doc(uid)
@@ -60,14 +61,12 @@ class _ChatPageState extends State<ChatPage> {
           _userName = userData?['profile']?['info']?['name'] ?? 'User';
         }
 
-        // Initialize the user object
         _user = types.User(
           id: uid,
           firstName: _userName,
           imageUrl: _userPhotoUrl,
         );
       } else {
-        // Fallback if no user is logged in
         _user = const types.User(
           id: '82091008-a484-4a89-ae75-a22bf8d6f3ac',
           firstName: 'User',
@@ -75,7 +74,6 @@ class _ChatPageState extends State<ChatPage> {
       }
     } catch (e) {
       debugPrint('Error loading user data: $e');
-      // Fallback user
       _user = const types.User(
         id: '82091008-a484-4a89-ae75-a22bf8d6f3ac',
         firstName: 'User',
@@ -85,8 +83,47 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  Future<void> _saveMessages() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Convert each message safely to JSON
+      final messagesJson = _messages.map((m) => m.toJson()).toList();
+      final encoded = jsonEncode(messagesJson);
+      await prefs.setString('chat_messages', encoded);
+      debugPrint('💾 Saved ${_messages.length} messages');
+    } catch (e) {
+      debugPrint('⚠️ Error saving messages: $e');
+    }
+  }
+
+  Future<void> _loadSavedMessages() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final stored = prefs.getString('chat_messages');
+
+      if (stored != null && stored.isNotEmpty) {
+        final decoded = jsonDecode(stored) as List<dynamic>;
+        final loadedMessages = decoded
+            .map((e) => types.Message.fromJson(e as Map<String, dynamic>))
+            .toList();
+
+        setState(() {
+          _messages = loadedMessages;
+        });
+
+        debugPrint('✅ Loaded ${_messages.length} messages');
+      } else {
+        debugPrint('ℹ️ No saved messages found');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error loading messages: $e');
+    }
+  }
+
   void _addMessage(types.Message message) {
     setState(() => _messages.insert(0, message));
+    _saveMessages();
   }
 
   void _handleAttachmentPressed() {
@@ -211,14 +248,15 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void _handlePreviewDataFetched(
-      types.TextMessage message,
-      types.PreviewData previewData,
-      ) {
+    types.TextMessage message,
+    types.PreviewData previewData,
+  ) {
     final index = _messages.indexWhere((m) => m.id == message.id);
     final updatedMessage = (_messages[index] as types.TextMessage).copyWith(
       previewData: previewData,
     );
     setState(() => _messages[index] = updatedMessage);
+    _saveMessages();
   }
 
   Future<void> _handleSendPressed(types.PartialText message) async {
@@ -245,30 +283,13 @@ class _ChatPageState extends State<ChatPage> {
     _addMessage(botMessage);
   }
 
-  void _loadMessages() async {
-    final response = await rootBundle.loadString('assets/messages.json');
-    final messages = (jsonDecode(response) as List)
-        .map((e) => types.Message.fromJson(e as Map<String, dynamic>))
-        .toList();
-
-    setState(() => _messages = messages);
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_isLoadingUserData) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Container(
-      decoration: const BoxDecoration(
-        image: DecorationImage(
-          image: AssetImage('lib/assets/Peelie best version.png'),
-          fit: BoxFit.cover,
-        ),
-      ),
       child: Scaffold(
         backgroundColor: Colors.white,
         appBar: AppBar(
@@ -280,11 +301,22 @@ class _ChatPageState extends State<ChatPage> {
               fontWeight: FontWeight.w600,
             ),
           ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.black),
+              onPressed: () async {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.remove('chat_messages');
+                setState(() => _messages.clear());
+              },
+            ),
+          ],
         ),
         body: Chat(
           isAttachmentUploading: isDataLoading,
           l10n: ChatL10nEn(
-            emptyChatPlaceholder: 'Hi ${_userName ?? 'there'} !! I am PEELY. Ask me anything about Food',
+            emptyChatPlaceholder:
+                'Hi ${_userName ?? 'there'} !! I am PEELY. Ask me anything about Food',
           ),
           messages: _messages,
           onAttachmentPressed: _handleAttachmentPressed,
@@ -297,10 +329,9 @@ class _ChatPageState extends State<ChatPage> {
           avatarBuilder: (types.User user) {
             if (user.id == _bot.id) {
               return const CircleAvatar(
-                backgroundImage: AssetImage('lib/assets/Peelie best version.png'),
+                backgroundImage: AssetImage('lib/assets/Peely.png'),
               );
             }
-            // User avatar from Firestore
             if (user.imageUrl != null && user.imageUrl!.isNotEmpty) {
               return CircleAvatar(
                 backgroundImage: NetworkImage(user.imageUrl!),
@@ -310,7 +341,6 @@ class _ChatPageState extends State<ChatPage> {
                 child: null,
               );
             }
-            // Fallback avatar
             return CircleAvatar(
               backgroundColor: Colors.green,
               child: Text(

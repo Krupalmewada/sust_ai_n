@@ -39,8 +39,10 @@ class InventoryTab extends StatelessWidget {
                       ),
                     ),
                     IconButton(
-                      onPressed: () {},
-                      icon: const Icon(Icons.shopping_cart_outlined, size: 26),
+                      onPressed: (){
+                      Navigator.pushNamed(context, '/peely');
+                    },
+                      icon: const Icon(Icons.chat, size: 26),
                     ),
                   ],
                 ),
