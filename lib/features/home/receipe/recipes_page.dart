@@ -18,7 +18,7 @@ class RecipesPageState extends State<RecipesPage> with RouteAware {
   bool _isLoading = false;
   List<Map<String, dynamic>> _recipes = [];
 
-  static const String _apiKey = '*';
+  static const String _apiKey = '66bb7104cada4450a9234433e0390e00';
   static const String _baseUrl = 'https://api.spoonacular.com';
 
   @override
@@ -80,7 +80,7 @@ class RecipesPageState extends State<RecipesPage> with RouteAware {
           .where((e) => e.isNotEmpty)
           .join(',');
 
-      const desiredCount = 3; // how many valid recipes to show
+      const desiredCount = 5; // how many valid recipes to show
       final List<Map<String, dynamic>> validRecipes = [];
       int attempts = 0;
 
