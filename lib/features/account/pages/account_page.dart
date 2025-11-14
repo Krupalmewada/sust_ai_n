@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:sust_ai_n/features/account/pages/edit_profile.dart';
 import '../../../widgets/bottom_nav_bar.dart';
+import '../../Login/survey_form.dart';
 
 class AccountPage extends StatefulWidget {
   const AccountPage({super.key});
@@ -64,21 +65,21 @@ class _AccountPageState extends State<AccountPage> {
                             : null,
                       ),
                       // ✅ Navigate to Update Profile Page on tap
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const EditProfilePage(),
-                            ),
-                          );
-                        },
-                        child: CircleAvatar(
-                          radius: 15,
-                          backgroundColor: Colors.white,
-                          child: Icon(Icons.edit, color: green, size: 18),
-                        ),
-                      ),
+                      // GestureDetector(
+                      //   onTap: () {
+                      //     Navigator.push(
+                      //       context,
+                      //       MaterialPageRoute(
+                      //         builder: (context) => const EditProfilePage(),
+                      //       ),
+                      //     );
+                      //   },
+                      //   child: CircleAvatar(
+                      //     radius: 15,
+                      //     backgroundColor: Colors.white,
+                      //     child: Icon(Icons.edit, color: green, size: 18),
+                      //   ),
+                      // ),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -137,7 +138,14 @@ class _AccountPageState extends State<AccountPage> {
                   _QuickActionButton(
                     icon: Icons.list_alt_rounded,
                     label: "Change Survey",
-                    onTap: () {},
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const SurveyForm(),
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(width: 12),
                   _QuickActionButton(

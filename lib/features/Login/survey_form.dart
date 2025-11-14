@@ -8,11 +8,13 @@ class SurveyForm extends StatefulWidget {
 }
 
 class _SurveyForm extends State<SurveyForm> {
-  final _ageGroupController = TextEditingController();
+  final _adultController = TextEditingController();
+  final _kidsController = TextEditingController();
   final _familyCountController = TextEditingController();
   final _spendingController = TextEditingController();
 
-  final FocusNode _ageFocus = FocusNode();
+  final FocusNode _adultFocus = FocusNode();
+  final FocusNode _kidsFocus = FocusNode();
   final FocusNode _familyFocus = FocusNode();
   final FocusNode _spendingFocus = FocusNode();
 
@@ -26,6 +28,7 @@ class _SurveyForm extends State<SurveyForm> {
     'Lactose Intolerant',
     'Pescatarian',
   ];
+
   final List<String> cuisineOptions = [
     'Italian',
     'Indian',
@@ -39,7 +42,8 @@ class _SurveyForm extends State<SurveyForm> {
   List<String> selectedCuisines = [];
 
   // Error messages
-  String? _ageError;
+  String? _adultError;
+  String? _kidsError;
   String? _familyError;
   String? _dietError;
   String? _cuisineError;
@@ -51,11 +55,21 @@ class _SurveyForm extends State<SurveyForm> {
     super.initState();
 
     // Validate on focus lost
-    _ageFocus.addListener(() {
-      if (!_ageFocus.hasFocus) {
+    _adultFocus.addListener(() {
+      if (!_adultFocus.hasFocus) {
         setState(() {
-          _ageError = _ageGroupController.text.trim().isEmpty
-              ? "Please enter age group."
+          _adultError = _adultController.text.trim().isEmpty
+              ? "Please enter number of adults."
+              : null;
+        });
+      }
+    });
+
+    _kidsFocus.addListener(() {
+      if (!_kidsFocus.hasFocus) {
+        setState(() {
+          _kidsError = _kidsController.text.trim().isEmpty
+              ? "Please enter number of kids."
               : null;
         });
       }
@@ -84,10 +98,12 @@ class _SurveyForm extends State<SurveyForm> {
 
   @override
   void dispose() {
-    _ageGroupController.dispose();
+    _adultController.dispose();
+    _kidsController.dispose();
     _familyCountController.dispose();
     _spendingController.dispose();
-    _ageFocus.dispose();
+    _adultFocus.dispose();
+    _kidsFocus.dispose();
     _familyFocus.dispose();
     _spendingFocus.dispose();
     super.dispose();
@@ -114,18 +130,34 @@ class _SurveyForm extends State<SurveyForm> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Age group
-                    _buildLabel("Age group of household members"),
-                    TextField(
-                      controller: _ageGroupController,
-                      focusNode: _ageFocus,
-                      decoration: _inputDecoration("e.g. 2 adults, 2 kids"),
+                    // Adults + Kids
+                    _buildLabel("Household Members"),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _adultController,
+                            focusNode: _adultFocus,
+                            keyboardType: TextInputType.number,
+                            decoration: _inputDecoration("Adults"),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: TextField(
+                            controller: _kidsController,
+                            focusNode: _kidsFocus,
+                            keyboardType: TextInputType.number,
+                            decoration: _inputDecoration("Kids"),
+                          ),
+                        ),
+                      ],
                     ),
-                    if (_ageError != null)
+                    if (_adultError != null || _kidsError != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 5),
                         child: Text(
-                          _ageError!,
+                          _adultError ?? _kidsError ?? "",
                           style: const TextStyle(color: errorColor),
                         ),
                       ),
@@ -152,7 +184,7 @@ class _SurveyForm extends State<SurveyForm> {
                     // Dietary restrictions
                     _buildLabelWithAdd(
                       "Dietary restrictions",
-                          () => _showAddDialog(
+                      () => _showAddDialog(
                         title: "Add Dietary Restriction",
                         onAdd: (value) =>
                             setState(() => dietaryOptions.add(value)),
@@ -195,7 +227,7 @@ class _SurveyForm extends State<SurveyForm> {
                     // Preferred cuisines
                     _buildLabelWithAdd(
                       "Preferred cuisines",
-                          () => _showAddDialog(
+                      () => _showAddDialog(
                         title: "Add Preferred Cuisine",
                         onAdd: (value) =>
                             setState(() => cuisineOptions.add(value)),
@@ -260,28 +292,25 @@ class _SurveyForm extends State<SurveyForm> {
                       dropdownColor: Colors.white,
                       style: const TextStyle(color: Colors.black87),
                       value: _shoppingFrequency,
-                      items:
-                      [
+                      items: [
                         'Every day',
                         '2-3 times a week',
                         'Once a week',
                         'Bi-weekly',
                         'Monthly',
                       ]
-                          .map(
-                            (freq) => DropdownMenuItem(
-                          value: freq,
-                          child: Text(freq),
-                        ),
-                      )
+                          .map((freq) => DropdownMenuItem(
+                                value: freq,
+                                child: Text(freq),
+                              ))
                           .toList(),
                       onChanged: (value) => setState(() {
                         _shoppingFrequency = value;
                         _frequencyError =
-                        (_shoppingFrequency == null ||
-                            _shoppingFrequency!.isEmpty)
-                            ? "Please select shopping frequency."
-                            : null;
+                            (_shoppingFrequency == null ||
+                                    _shoppingFrequency!.isEmpty)
+                                ? "Please select shopping frequency."
+                                : null;
                       }),
                     ),
                     if (_frequencyError != null)
@@ -325,12 +354,16 @@ class _SurveyForm extends State<SurveyForm> {
   void _handleSubmit() {
     setState(() {
       // Reset errors
-      _ageError = _familyError = _dietError = _cuisineError = _spendingError =
-          _frequencyError = null;
+      _adultError = _kidsError = _familyError = _dietError = _cuisineError =
+          _spendingError = _frequencyError = null;
       bool hasError = false;
 
-      if (_ageGroupController.text.trim().isEmpty) {
-        _ageError = "Please enter age group.";
+      if (_adultController.text.trim().isEmpty) {
+        _adultError = "Please enter number of adults.";
+        hasError = true;
+      }
+      if (_kidsController.text.trim().isEmpty) {
+        _kidsError = "Please enter number of kids.";
         hasError = true;
       }
       if (_familyCountController.text.trim().isEmpty) {
@@ -355,14 +388,15 @@ class _SurveyForm extends State<SurveyForm> {
       }
 
       if (!hasError) {
-        final List<Map<String, String>> responses = [
-          {'Age group': _ageGroupController.text},
-          {'Family members': _familyCountController.text},
-          {'Dietary restrictions': selectedDietary.join(', ')},
-          {'Preferred cuisines': selectedCuisines.join(', ')},
-          {'Weekly spending': '\$${_spendingController.text}'},
-          {'Shopping frequency': _shoppingFrequency ?? ''},
-        ];
+        final responses = {
+          'Adults': _adultController.text,
+          'Kids': _kidsController.text,
+          'Family members': _familyCountController.text,
+          'Dietary restrictions': selectedDietary.join(', '),
+          'Preferred cuisines': selectedCuisines.join(', '),
+          'Weekly spending': '\$${_spendingController.text}',
+          'Shopping frequency': _shoppingFrequency ?? '',
+        };
 
         print(responses);
 
@@ -374,37 +408,38 @@ class _SurveyForm extends State<SurveyForm> {
   }
 
   Text _buildLabel(String text) => Text(
-    text,
-    style: const TextStyle(
-      fontSize: 16,
-      fontWeight: FontWeight.bold,
-      color: Colors.black87,
-    ),
-  );
-
-  Widget _buildLabelWithAdd(String text, VoidCallback onAdd) => Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    children: [
-      Text(
         text,
         style: const TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.bold,
           color: Colors.black87,
         ),
-      ),
-      IconButton(
-        icon: const Icon(Icons.add, color: Colors.green),
-        onPressed: onAdd,
-      ),
-    ],
-  );
+      );
+
+  Widget _buildLabelWithAdd(String text, VoidCallback onAdd) => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            text,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.add, color: Colors.green),
+            onPressed: onAdd,
+          ),
+        ],
+      );
 
   InputDecoration _inputDecoration(String hint) => InputDecoration(
-    hintText: hint,
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-  );
+        hintText: hint,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      );
 
   void _showAddDialog({
     required String title,
