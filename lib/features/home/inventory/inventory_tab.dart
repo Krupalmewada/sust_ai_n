@@ -344,7 +344,7 @@ class _InventoryTabState extends State<InventoryTab> {
                                               width: width * 0.12,
                                               fit: BoxFit.cover,
                                               errorBuilder: (_, __, ___) => Image.asset(
-                                                'assets/images/diet.png',
+                                                'lib/assets/diet.png',
                                                 height: width * 0.12,
                                                 width: width * 0.12,
                                                 fit: BoxFit.contain,
@@ -354,7 +354,7 @@ class _InventoryTabState extends State<InventoryTab> {
                                         } else {
                                           // ✅ Fallback to your local asset
                                           return Image.asset(
-                                            'assets/images/diet.png',
+                                            'lib/assets/diet.png',
                                             height: width * 0.12,
                                             width: width * 0.12,
                                             fit: BoxFit.contain,
