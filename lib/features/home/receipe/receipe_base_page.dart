@@ -4,7 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../widgets/bottom_nav_bar.dart';
 import '../../../widgets/inventory_tab_selector.dart';
-import 'categories_page.dart';
 import 'grocery_list_page.dart';
 import 'recipes_page.dart';
 
@@ -66,15 +65,11 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
 
       // ---------- App Bar ----------
       appBar: AppBar(
-        automaticallyImplyLeading: false, // ✅ no back button
+        automaticallyImplyLeading: false,
         backgroundColor: Colors.white,
         elevation: 0,
         title: Text(
-          _selectedTabIndex == 0
-              ? "Recipes"
-              : _selectedTabIndex == 1
-              ? "My Grocery List"
-              : "My Categories",
+          _selectedTabIndex == 0 ? "Recipes" : "My Grocery List",
           style: const TextStyle(
             color: Colors.black,
             fontWeight: FontWeight.w600,
@@ -110,7 +105,6 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
                       controller: _searchController,
                       onChanged: (value) {
                         final query = value.trim();
-
                         if (_selectedTabIndex == 0) {
                           recipesPageKey.currentState
                               ?.searchRecipes(query);
@@ -123,9 +117,7 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
                       decoration: InputDecoration(
                         hintText: _selectedTabIndex == 0
                             ? "Search recipes"
-                            : _selectedTabIndex == 1
-                            ? "Search grocery list"
-                            : "Search categories",
+                            : "Search grocery list",
                         border: InputBorder.none,
                         hintStyle:
                         const TextStyle(color: Colors.grey),
@@ -153,17 +145,15 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
             // 📋 Section Heading
             Text(
               _selectedTabIndex == 0
-                  ? "Suggested Recipes"
-                  : _selectedTabIndex == 1
-                  ? "Your Grocery List"
-                  : "Your Categories",
+                  ? "Your Recipes"
+                  : "Your Grocery List",
               style: const TextStyle(
                   fontSize: 20, fontWeight: FontWeight.bold),
             ),
 
             SizedBox(height: height * 0.015),
 
-            // 🔘 Tab Selector
+            // 🔘 Tab Selector (Top Level: Recipes / List)
             InventoryTabSelector(
               selectedIndex: _selectedTabIndex,
               onTabSelected: (index) {
@@ -185,14 +175,13 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
               child: IndexedStack(
                 index: _selectedTabIndex,
                 children: [
-                  RecipesPage(
-                    key: recipesPageKey,
-                    inventoryItems: _inventoryItems,
-                  ),
+                  // 🍽️ Recipes Section with horizontal filter chips
+                  RecipesContainer(inventoryItems: _inventoryItems),
+
+                  // 🛒 Grocery List
                   GroceryListPage(
                     key: groceryListPageKey,
                   ),
-                  const CategoriesPage(),
                 ],
               ),
             ),
@@ -202,7 +191,7 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
 
       // ---------- Bottom Navigation ----------
       bottomNavigationBar: BottomNavBar(
-        currentIndex: 1, // ✅ mark Recipes as active
+        currentIndex: 1,
         onTap: (index) {
           if (index == 0) {
             Navigator.pushNamed(context, '/inventory');
@@ -223,3 +212,77 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
 final GlobalKey<RecipesPageState> recipesPageKey = GlobalKey<RecipesPageState>();
 final GlobalKey<GroceryListPageState> groceryListPageKey =
 GlobalKey<GroceryListPageState>();
+
+// --------------------------------------------------------
+// 🍔 RecipesContainer — McDonald’s-style filter layout
+// --------------------------------------------------------
+class RecipesContainer extends StatefulWidget {
+  final List<String> inventoryItems;
+  const RecipesContainer({super.key, required this.inventoryItems});
+
+  @override
+  State<RecipesContainer> createState() => _RecipesContainerState();
+}
+
+class _RecipesContainerState extends State<RecipesContainer> {
+  int _selectedFilter = 0;
+  final List<String> _filters = ["Suggested", "Favorites", "Added"];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // 🔹 Horizontal filter bar
+        SizedBox(
+          height: 45,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: _filters.length,
+            itemBuilder: (context, index) {
+              final isSelected = _selectedFilter == index;
+              return Padding(
+                padding: const EdgeInsets.only(right: 12.0),
+                child: GestureDetector(
+                  onTap: () => setState(() => _selectedFilter = index),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(0xFF23C483)
+                          : const Color(0xFFF2F2F2),
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Text(
+                      _filters[index],
+                      style: TextStyle(
+                        color: isSelected ? Colors.white : Colors.black87,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // 🔄 Dynamic content area
+        Expanded(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            child: _selectedFilter == 0
+                ? RecipesPage(
+              key: recipesPageKey,
+              inventoryItems: widget.inventoryItems,
+            )
+                : _selectedFilter == 1
+                ? const Center(child: Text("⭐ Favorite Recipes"))
+                : const Center(child: Text("📝 Added Recipes")),
+          ),
+        ),
+      ],
+    );
+  }
+}
