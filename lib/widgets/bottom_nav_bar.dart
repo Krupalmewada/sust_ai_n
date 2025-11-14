@@ -61,14 +61,7 @@ class BottomNavBar extends StatelessWidget {
               _NavIcon(
                 icon: Icons.person_outline,
                 isActive: currentIndex == 3,
-                 onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const AccountPage(),
-                    ),
-                  );
-                },
+                 onTap: ()  => onTap(3),
               ),
             ],
           ),

@@ -203,7 +203,7 @@ class _AccountPageState extends State<AccountPage> {
           } else if (index == 1) {
             Navigator.pushNamed(context, '/recipes');
           } else if (index == 2) {
-            Navigator.pushNamed(context, '/offers');
+            Navigator.pushNamed(context, '/userinventory');
           } else if (index == 3) {
             // already here
           }
