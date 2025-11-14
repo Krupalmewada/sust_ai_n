@@ -19,7 +19,7 @@ class _InventoryTabState extends State<InventoryTab> {
   final InventoryService _inventoryService = InventoryService();
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final String _apiKey = '66bb7104cada4450a9234433e0390e00';
+  final String _apiKey = '**';
 
   bool _isLoadingRecipes = false;
 

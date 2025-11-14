@@ -6,8 +6,7 @@ import 'package:flutter/foundation.dart';
 
 /// InventoryService — combines Spoonacular metadata + USDA FoodKeeper shelf-life estimation.
 class InventoryService {
-  static const String _spoonacularKey = '66bb7104cada4450a9234433e0390e00';
-  static const String _usdaKey = 'nie9seeBfmXad44xrp7hj5fXqdriqUbOA7o53NAP'; // USDA key
+  static const String _spoonacularKey = '**';
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
