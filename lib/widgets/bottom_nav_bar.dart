@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sust_ai_n/features/account/pages/account_page.dart';
 import '../features/ocr_scan/presentation/pages/scan_page.dart';
 
 class BottomNavBar extends StatelessWidget {
@@ -60,7 +61,7 @@ class BottomNavBar extends StatelessWidget {
               _NavIcon(
                 icon: Icons.person_outline,
                 isActive: currentIndex == 3,
-                onTap: () => onTap(3),
+                 onTap: ()  => onTap(3),
               ),
             ],
           ),

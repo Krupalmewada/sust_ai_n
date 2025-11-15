@@ -1,4 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:sust_ai_n/features/account/pages/account_page.dart';
+import 'package:sust_ai_n/features/home/inventory/inventory_tab.dart';
+
+User? user = FirebaseAuth.instance.currentUser;
 
 class SurveyForm extends StatefulWidget {
   const SurveyForm({super.key});
@@ -8,11 +14,13 @@ class SurveyForm extends StatefulWidget {
 }
 
 class _SurveyForm extends State<SurveyForm> {
-  final _ageGroupController = TextEditingController();
+  final _adultController = TextEditingController();
+  final _kidsController = TextEditingController();
   final _familyCountController = TextEditingController();
   final _spendingController = TextEditingController();
 
-  final FocusNode _ageFocus = FocusNode();
+  final FocusNode _adultFocus = FocusNode();
+  final FocusNode _kidsFocus = FocusNode();
   final FocusNode _familyFocus = FocusNode();
   final FocusNode _spendingFocus = FocusNode();
 
@@ -26,6 +34,7 @@ class _SurveyForm extends State<SurveyForm> {
     'Lactose Intolerant',
     'Pescatarian',
   ];
+
   final List<String> cuisineOptions = [
     'Italian',
     'Indian',
@@ -39,23 +48,41 @@ class _SurveyForm extends State<SurveyForm> {
   List<String> selectedCuisines = [];
 
   // Error messages
-  String? _ageError;
+  String? _adultError;
+  String? _kidsError;
   String? _familyError;
   String? _dietError;
   String? _cuisineError;
   String? _spendingError;
   String? _frequencyError;
 
+  // loader flag
+  bool _isLoading = true;
+
+  // Edit mode flag
+  bool _isEditMode = false;
+
   @override
   void initState() {
     super.initState();
+    _loadSurveyData();
 
     // Validate on focus lost
-    _ageFocus.addListener(() {
-      if (!_ageFocus.hasFocus) {
+    _adultFocus.addListener(() {
+      if (!_adultFocus.hasFocus) {
         setState(() {
-          _ageError = _ageGroupController.text.trim().isEmpty
-              ? "Please enter age group."
+          _adultError = _adultController.text.trim().isEmpty
+              ? "Please enter number of adults."
+              : null;
+        });
+      }
+    });
+
+    _kidsFocus.addListener(() {
+      if (!_kidsFocus.hasFocus) {
+        setState(() {
+          _kidsError = _kidsController.text.trim().isEmpty
+              ? "Please enter number of kids."
               : null;
         });
       }
@@ -84,10 +111,12 @@ class _SurveyForm extends State<SurveyForm> {
 
   @override
   void dispose() {
-    _ageGroupController.dispose();
+    _adultController.dispose();
+    _kidsController.dispose();
     _familyCountController.dispose();
     _spendingController.dispose();
-    _ageFocus.dispose();
+    _adultFocus.dispose();
+    _kidsFocus.dispose();
     _familyFocus.dispose();
     _spendingFocus.dispose();
     super.dispose();
@@ -96,6 +125,14 @@ class _SurveyForm extends State<SurveyForm> {
   @override
   Widget build(BuildContext context) {
     const errorColor = Colors.red;
+
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(color: Colors.green),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -114,24 +151,38 @@ class _SurveyForm extends State<SurveyForm> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Age group
-                    _buildLabel("Age group of household members"),
-                    TextField(
-                      controller: _ageGroupController,
-                      focusNode: _ageFocus,
-                      decoration: _inputDecoration("e.g. 2 adults, 2 kids"),
+                    _buildLabel("Household Members"),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _adultController,
+                            focusNode: _adultFocus,
+                            keyboardType: TextInputType.number,
+                            decoration: _inputDecoration("Adults"),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: TextField(
+                            controller: _kidsController,
+                            focusNode: _kidsFocus,
+                            keyboardType: TextInputType.number,
+                            decoration: _inputDecoration("Kids"),
+                          ),
+                        ),
+                      ],
                     ),
-                    if (_ageError != null)
+                    if (_adultError != null || _kidsError != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 5),
                         child: Text(
-                          _ageError!,
+                          _adultError ?? _kidsError ?? "",
                           style: const TextStyle(color: errorColor),
                         ),
                       ),
                     const SizedBox(height: 20),
 
-                    // Family count
                     _buildLabel("Number of family members"),
                     TextField(
                       controller: _familyCountController,
@@ -149,10 +200,9 @@ class _SurveyForm extends State<SurveyForm> {
                       ),
                     const SizedBox(height: 20),
 
-                    // Dietary restrictions
                     _buildLabelWithAdd(
                       "Dietary restrictions",
-                          () => _showAddDialog(
+                      () => _showAddDialog(
                         title: "Add Dietary Restriction",
                         onAdd: (value) =>
                             setState(() => dietaryOptions.add(value)),
@@ -192,10 +242,9 @@ class _SurveyForm extends State<SurveyForm> {
                       ),
                     const SizedBox(height: 20),
 
-                    // Preferred cuisines
                     _buildLabelWithAdd(
                       "Preferred cuisines",
-                          () => _showAddDialog(
+                      () => _showAddDialog(
                         title: "Add Preferred Cuisine",
                         onAdd: (value) =>
                             setState(() => cuisineOptions.add(value)),
@@ -235,7 +284,6 @@ class _SurveyForm extends State<SurveyForm> {
                       ),
                     const SizedBox(height: 20),
 
-                    // Weekly grocery spending
                     _buildLabel("Weekly grocery spending (\$)"),
                     TextField(
                       controller: _spendingController,
@@ -253,15 +301,13 @@ class _SurveyForm extends State<SurveyForm> {
                       ),
                     const SizedBox(height: 20),
 
-                    // Grocery frequency
                     _buildLabel("How regularly do you get groceries?"),
                     DropdownButtonFormField<String>(
                       decoration: _inputDecoration("Select frequency"),
                       dropdownColor: Colors.white,
                       style: const TextStyle(color: Colors.black87),
                       value: _shoppingFrequency,
-                      items:
-                      [
+                      items: [
                         'Every day',
                         '2-3 times a week',
                         'Once a week',
@@ -270,18 +316,18 @@ class _SurveyForm extends State<SurveyForm> {
                       ]
                           .map(
                             (freq) => DropdownMenuItem(
-                          value: freq,
-                          child: Text(freq),
-                        ),
-                      )
+                              value: freq,
+                              child: Text(freq),
+                            ),
+                          )
                           .toList(),
                       onChanged: (value) => setState(() {
                         _shoppingFrequency = value;
                         _frequencyError =
-                        (_shoppingFrequency == null ||
-                            _shoppingFrequency!.isEmpty)
-                            ? "Please select shopping frequency."
-                            : null;
+                            (_shoppingFrequency == null ||
+                                    _shoppingFrequency!.isEmpty)
+                                ? "Please select shopping frequency."
+                                : null;
                       }),
                     ),
                     if (_frequencyError != null)
@@ -297,7 +343,6 @@ class _SurveyForm extends State<SurveyForm> {
               ),
             ),
 
-            // Submit button fixed at bottom
             Container(
               color: Colors.white,
               padding: const EdgeInsets.all(16),
@@ -310,9 +355,9 @@ class _SurveyForm extends State<SurveyForm> {
                   ),
                 ),
                 onPressed: _handleSubmit,
-                child: const Text(
-                  "Submit",
-                  style: TextStyle(fontSize: 18, color: Colors.white),
+                child: Text(
+                  _isEditMode ? "Update" : "Submit",
+                  style: const TextStyle(fontSize: 18, color: Colors.white),
                 ),
               ),
             ),
@@ -324,13 +369,16 @@ class _SurveyForm extends State<SurveyForm> {
 
   void _handleSubmit() {
     setState(() {
-      // Reset errors
-      _ageError = _familyError = _dietError = _cuisineError = _spendingError =
-          _frequencyError = null;
+      _adultError = _kidsError = _familyError = _dietError = _cuisineError =
+          _spendingError = _frequencyError = null;
       bool hasError = false;
 
-      if (_ageGroupController.text.trim().isEmpty) {
-        _ageError = "Please enter age group.";
+      if (_adultController.text.trim().isEmpty) {
+        _adultError = "Please enter number of adults.";
+        hasError = true;
+      }
+      if (_kidsController.text.trim().isEmpty) {
+        _kidsError = "Please enter number of kids.";
         hasError = true;
       }
       if (_familyCountController.text.trim().isEmpty) {
@@ -355,56 +403,107 @@ class _SurveyForm extends State<SurveyForm> {
       }
 
       if (!hasError) {
-        final List<Map<String, String>> responses = [
-          {'Age group': _ageGroupController.text},
-          {'Family members': _familyCountController.text},
-          {'Dietary restrictions': selectedDietary.join(', ')},
-          {'Preferred cuisines': selectedCuisines.join(', ')},
-          {'Weekly spending': '\$${_spendingController.text}'},
-          {'Shopping frequency': _shoppingFrequency ?? ''},
-        ];
+      submitSurveyToFirestore().then((_) {
+        if (!_isEditMode) {
+          Navigator.pop(
+            context,
+            MaterialPageRoute(builder: (_) => InventoryTab()),
+          );
+        }else{
+          Navigator.pop(context);
+        }
+      });
+    }
+  });
+}
 
-        print(responses);
+  Future<void> submitSurveyToFirestore() async {
+    if (user == null) return;
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Responses submitted successfully!')),
-        );
-      }
-    });
+    final surveyData = {
+      'adults': _adultController.text.trim(),
+      'kids': _kidsController.text.trim(),
+      'familyCount': _familyCountController.text.trim(),
+      'dietaryRestrictions': selectedDietary,
+      'preferredCuisines': selectedCuisines,
+      'weeklySpending': _spendingController.text.trim(),
+      'shoppingFrequency': _shoppingFrequency,
+      'submittedAt': FieldValue.serverTimestamp(),
+    };
+
+    await FirebaseFirestore.instance.collection('users').doc(user!.uid).set({
+      'profile': {'survey': surveyData},
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> _loadSurveyData() async {
+    if (user == null) {
+      setState(() => _isLoading = false);
+      return;
+    }
+
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user!.uid)
+        .get();
+
+    if (!doc.exists) {
+      setState(() => _isLoading = false);
+      return;
+    }
+
+    final data = doc.data();
+    final survey = data?['profile']?['survey'];
+
+    if (survey != null) {
+      _adultController.text = survey['adults'] ?? '';
+      _kidsController.text = survey['kids'] ?? '';
+      _familyCountController.text = survey['familyCount'] ?? '';
+      _spendingController.text = survey['weeklySpending'] ?? '';
+
+      selectedDietary = List<String>.from(survey['dietaryRestrictions'] ?? []);
+      selectedCuisines = List<String>.from(survey['preferredCuisines'] ?? []);
+
+      _shoppingFrequency = survey['shoppingFrequency'] ?? '';
+
+      _isEditMode = true;
+    }
+
+    setState(() => _isLoading = false);
   }
 
   Text _buildLabel(String text) => Text(
-    text,
-    style: const TextStyle(
-      fontSize: 16,
-      fontWeight: FontWeight.bold,
-      color: Colors.black87,
-    ),
-  );
-
-  Widget _buildLabelWithAdd(String text, VoidCallback onAdd) => Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    children: [
-      Text(
         text,
         style: const TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.bold,
           color: Colors.black87,
         ),
-      ),
-      IconButton(
-        icon: const Icon(Icons.add, color: Colors.green),
-        onPressed: onAdd,
-      ),
-    ],
-  );
+      );
+
+  Widget _buildLabelWithAdd(String text, VoidCallback onAdd) => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            text,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.add, color: Colors.green),
+            onPressed: onAdd,
+          ),
+        ],
+      );
 
   InputDecoration _inputDecoration(String hint) => InputDecoration(
-    hintText: hint,
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-  );
+        hintText: hint,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      );
 
   void _showAddDialog({
     required String title,
@@ -425,13 +524,13 @@ class _SurveyForm extends State<SurveyForm> {
         content: TextField(
           controller: controller,
           style: const TextStyle(color: Colors.black87),
-          decoration: InputDecoration(
+          decoration: const InputDecoration(
             hintText: "Enter value",
-            hintStyle: const TextStyle(color: Colors.grey),
-            enabledBorder: const UnderlineInputBorder(
+            hintStyle: TextStyle(color: Colors.grey),
+            enabledBorder: UnderlineInputBorder(
               borderSide: BorderSide(color: Colors.green),
             ),
-            focusedBorder: const UnderlineInputBorder(
+            focusedBorder: UnderlineInputBorder(
               borderSide: BorderSide(color: Colors.green, width: 2),
             ),
           ),

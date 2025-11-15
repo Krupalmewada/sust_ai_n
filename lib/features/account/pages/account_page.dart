@@ -1,177 +1,191 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:sust_ai_n/features/account/pages/edit_profile.dart';
+import '../../../widgets/bottom_nav_bar.dart';
+import '../../Login/survey_form.dart';
 
-class AccountPage extends StatelessWidget {
+class AccountPage extends StatefulWidget {
   const AccountPage({super.key});
+
+  @override
+  State<AccountPage> createState() => _AccountPageState();
+}
+
+class _AccountPageState extends State<AccountPage> {
+  final user = FirebaseAuth.instance.currentUser;
+  int _currentIndex = 3; // Profile tab active
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final green = Colors.green;
+    final green = Colors.green.shade600;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8F7),
-      body: SafeArea(
+      appBar: AppBar(
+        backgroundColor: green,
+        elevation: 0,
+        centerTitle: true,
+        title: const Text(
+          "My Account",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+      ),
+
+      body: SingleChildScrollView(
         child: Column(
           children: [
-            // Header
+            // 🔹 Profile Header
             Container(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-              color: Colors.white,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [green, Colors.green.shade300],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(24),
+                  bottomRight: Radius.circular(24),
+                ),
+              ),
+              child: Column(
                 children: [
-                  CircleAvatar(
-                    radius: 28,
-                    backgroundColor: Colors.green.withValues(alpha: 0.15),
-                    child: const Text('A', style: TextStyle(fontSize: 22)),
+                  Stack(
+                    alignment: Alignment.bottomRight,
+                    children: [
+                      CircleAvatar(
+                        radius: 45,
+                        backgroundColor: Colors.white,
+                        backgroundImage:
+                            user?.photoURL != null ? NetworkImage(user!.photoURL!) : null,
+                        child: user?.photoURL == null
+                            ? const Icon(Icons.person, size: 50, color: Colors.grey)
+                            : null,
+                      ),
+                      // ✅ Navigate to Update Profile Page on tap
+                      // GestureDetector(
+                      //   onTap: () {
+                      //     Navigator.push(
+                      //       context,
+                      //       MaterialPageRoute(
+                      //         builder: (context) => const EditProfilePage(),
+                      //       ),
+                      //     );
+                      //   },
+                      //   child: CircleAvatar(
+                      //     radius: 15,
+                      //     backgroundColor: Colors.white,
+                      //     child: Icon(Icons.edit, color: green, size: 18),
+                      //   ),
+                      // ),
+                    ],
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'Alex',
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                            Icon(Icons.edit, size: 18, color: green),
-                          ],
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'imalex97@gmail.com',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: Colors.black54,
-                          ),
-                        ),
-                      ],
+                  const SizedBox(height: 10),
+                  Text(
+                    user?.displayName ?? "Guest User",
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
                     ),
+                  ),
+                  Text(
+                    user?.email ?? "No email available",
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: Colors.white70,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: green,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+                    onPressed: () {
+                      // handle subscription click
+                    },
+                    child: const Text("Upgrade to Premium"),
                   ),
                 ],
               ),
             ),
 
-            // Menu list
-            Expanded(
-              child: SingleChildScrollView(
-                child: Column(
-                  children: [
-                    const _MenuCard(children: [
-                      _MenuItem(
-                        icon: Icons.local_offer_outlined,
-                        label: 'My Coupons',
-                      ),
-                      _MenuItem(
-                        icon: Icons.badge_outlined,
-                        label: 'My Details',
-                      ),
-                      _MenuItem(
-                        icon: Icons.notifications_none,
-                        label: 'Notifications',
-                      ),
-                      _MenuItem(
-                        icon: Icons.help_outline,
-                        label: 'Help',
-                      ),
-                      _MenuItem(
-                        icon: Icons.info_outline,
-                        label: 'About',
-                      ),
-                    ]),
+            const SizedBox(height: 20),
 
-                    // Premium upsell
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 12),
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE8F4EC),
-                          borderRadius: BorderRadius.circular(14),
+            // 🔹 Quick Action Buttons
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  _QuickActionButton(
+                    icon: Icons.edit_note_rounded,
+                    label: "Edit Profile",
+                    // ✅ Navigate to update page
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const EditProfilePage(),
                         ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(Icons.workspace_premium_rounded,
-                                color: green),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Get more features\nwith Premium',
-                                    style: theme.textTheme.titleSmall?.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  FilledButton.tonal(
-                                    onPressed: () {},
-                                    style: FilledButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 16, vertical: 8),
-                                      backgroundColor: Colors.white,
-                                      foregroundColor: green,
-                                      shape: const StadiumBorder(),
-                                    ),
-                                    child: const Text('Start subscription'),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 12),
+                  _QuickActionButton(
+                    icon: Icons.list_alt_rounded,
+                    label: "Change Survey",
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const SurveyForm(),
                         ),
-                      ),
-                    ),
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 12),
+                  _QuickActionButton(
+                    icon: Icons.workspace_premium_rounded,
+                    label: "Subscription",
+                    onTap: () {},
+                  ),
+                ],
+              ),
+            ),
 
-                    // Logout
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: .04),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(14),
-                          onTap: () {},
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 14),
-                            child: Row(
-                              children: [
-                                Icon(Icons.logout_rounded, color: green),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    'Log Out',
-                                    style: theme.textTheme.titleMedium?.copyWith(
-                                      color: green,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+            const SizedBox(height: 20),
+
+            // 🔹 Settings Section
+            _SettingsCard(title: "Settings", items: const [
+              _SettingsItem(icon: Icons.notifications_none, label: "Notifications"),
+              _SettingsItem(icon: Icons.lock_outline, label: "Privacy"),
+              _SettingsItem(icon: Icons.help_outline, label: "Help & Support"),
+              _SettingsItem(icon: Icons.info_outline, label: "About App"),
+            ]),
+
+            // 🔹 Logout Button
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+              child: ElevatedButton.icon(
+                onPressed: () async {
+                  await FirebaseAuth.instance.signOut();
+                  if (context.mounted) {
+                    Navigator.pushReplacementNamed(context, '/login');
+                  }
+                },
+                icon: const Icon(Icons.logout_rounded),
+                label: const Text("Log Out"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.redAccent,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
             ),
@@ -179,30 +193,64 @@ class AccountPage extends StatelessWidget {
         ),
       ),
 
-      // Bottom nav (visual only)
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      // ✅ Bottom Navigation
+      bottomNavigationBar: BottomNavBar(
+        currentIndex: _currentIndex,
+        onTap: (index) {
+          setState(() => _currentIndex = index);
+          if (index == 0) {
+            Navigator.pushNamed(context, '/inventory');
+          } else if (index == 1) {
+            Navigator.pushNamed(context, '/recipes');
+          } else if (index == 2) {
+            Navigator.pushNamed(context, '/userinventory');
+          } else if (index == 3) {
+            // already here
+          }
+        },
+      ),
+    );
+  }
+}
+
+// --- UI Components ---
+
+class _QuickActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _QuickActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
         child: Container(
-          height: 64,
+          padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
-                blurRadius: 16,
-                offset: const Offset(0, 8),
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
               ),
             ],
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+          child: Column(
             children: [
-              _NavIcon(icon: Icons.home_outlined, onTap: () {}),
-              _NavIcon(icon: Icons.restaurant_menu_outlined, onTap: () {}),
-              _CenterScanButton(onTap: () {}),
-              _NavIcon(icon: Icons.local_offer_outlined, onTap: () {}),
-              _NavIcon(icon: Icons.person_outline, onTap: () {}, active: true),
+              Icon(icon, color: Colors.green.shade700, size: 24),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+              ),
             ],
           ),
         ),
@@ -211,23 +259,22 @@ class AccountPage extends StatelessWidget {
   }
 }
 
-// --- small UI pieces ---
-
-class _MenuCard extends StatelessWidget {
-  final List<_MenuItem> children;
-  const _MenuCard({required this.children});
+class _SettingsCard extends StatelessWidget {
+  final String title;
+  final List<_SettingsItem> items;
+  const _SettingsCard({required this.title, required this.items});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
+              color: Colors.black.withOpacity(0.04),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -235,10 +282,19 @@ class _MenuCard extends StatelessWidget {
         ),
         child: Column(
           children: [
-            for (int i = 0; i < children.length; i++) ...[
-              if (i != 0) const Divider(height: 1, thickness: .6),
-              children[i],
-            ]
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            ...items,
           ],
         ),
       ),
@@ -246,58 +302,21 @@ class _MenuCard extends StatelessWidget {
   }
 }
 
-class _MenuItem extends StatelessWidget {
+class _SettingsItem extends StatelessWidget {
   final IconData icon;
   final String label;
-  const _MenuItem({required this.icon, required this.label});
+  const _SettingsItem({required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Icon(icon, color: Colors.black87),
-      title: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-      trailing: const Icon(Icons.chevron_right_rounded),
-      onTap: () {}, // not wired yet
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-    );
-  }
-}
-
-class _NavIcon extends StatelessWidget {
-  final IconData icon;
-  final bool active;
-  final VoidCallback onTap;
-  const _NavIcon({required this.icon, this.active = false, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      onPressed: onTap,
-      icon: Icon(
-        icon,
-        color: active ? Colors.green : Colors.black54,
+      leading: Icon(icon, color: Colors.green.shade600),
+      title: Text(
+        label,
+        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
       ),
-    );
-  }
-}
-
-class _CenterScanButton extends StatelessWidget {
-  final VoidCallback onTap;
-  const _CenterScanButton({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 54,
-        height: 54,
-        decoration: const BoxDecoration(
-          color: Colors.green,
-          shape: BoxShape.circle,
-        ),
-        child: const Icon(Icons.crop_free, color: Colors.white),
-      ),
+      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+      onTap: () {},
     );
   }
 }

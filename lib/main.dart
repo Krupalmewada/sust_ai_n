@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:sust_ai_n/features/account/pages/account_page.dart';
 import 'package:sust_ai_n/features/home/User_inventory/user_inventory_page.dart';
 import 'features/chatbot/chat_page.dart';
 import 'firebase_options.dart';
@@ -69,7 +70,8 @@ class MyApp extends StatelessWidget {
         '/recipesPage': (context) => const RecipesPage(inventoryItems: []),
         '/categories': (context) => const CategoriesPage(),
         '/groceryList': (context) => const GroceryListPage(),
-        '/peely' :(context)=> const ChatPage()
+        '/peely' :(context)=> const ChatPage(),
+        '/profile' : (context) => const AccountPage(),
       },
     );
   }
