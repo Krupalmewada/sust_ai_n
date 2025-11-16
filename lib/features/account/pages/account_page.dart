@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:sust_ai_n/features/account/pages/edit_profile.dart';
 import '../../../widgets/bottom_nav_bar.dart';
 import '../../Login/survey_form.dart';
@@ -12,13 +14,62 @@ class AccountPage extends StatefulWidget {
 }
 
 class _AccountPageState extends State<AccountPage> {
-  final user = FirebaseAuth.instance.currentUser;
-  int _currentIndex = 3; // Profile tab active
+  User? user = FirebaseAuth.instance.currentUser;
+  bool _isLoading = true;
+  String? profileName;
+  String? profilePhotoBase64;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshUser();
+  }
+
+  Future<void> _refreshUser() async {
+    setState(() => _isLoading = true);
+    
+    await FirebaseAuth.instance.currentUser?.reload();
+    user = FirebaseAuth.instance.currentUser;
+
+    // Fetch profile data from Firestore
+    if (user != null) {
+      try {
+        final docSnapshot = await FirebaseFirestore.instance
+            .collection("users")
+            .doc(user!.uid)
+            .get();
+
+        if (docSnapshot.exists) {
+          final data = docSnapshot.data();
+          profileName = data?["profile"]?["info"]?["name"];
+          profilePhotoBase64 = data?["profile"]?["info"]?["photoUrl"];
+        }
+      } catch (e) {
+        print("Error loading profile: $e");
+      }
+    }
+
+    setState(() => _isLoading = false);
+  }
+
+  int _currentIndex = 3;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final green = Colors.green.shade600;
+
+    // Determine profile image
+    ImageProvider? profileImage;
+    if (profilePhotoBase64 != null && 
+        profilePhotoBase64!.isNotEmpty && 
+        profilePhotoBase64 != "null") {
+      try {
+        profileImage = MemoryImage(base64Decode(profilePhotoBase64!));
+      } catch (e) {
+        print("Error decoding profile image: $e");
+      }
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8F7),
@@ -32,193 +83,175 @@ class _AccountPageState extends State<AccountPage> {
         ),
       ),
 
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // 🔹 Profile Header
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [green, Colors.green.shade300],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(24),
-                  bottomRight: Radius.circular(24),
-                ),
-              ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
               child: Column(
                 children: [
-                  Stack(
-                    alignment: Alignment.bottomRight,
-                    children: [
-                      CircleAvatar(
-                        radius: 45,
-                        backgroundColor: Colors.white,
-                        backgroundImage:
-                            user?.photoURL != null ? NetworkImage(user!.photoURL!) : null,
-                        child: user?.photoURL == null
-                            ? const Icon(Icons.person, size: 50, color: Colors.grey)
-                            : null,
+                  // Profile Header
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [green, Colors.green.shade300],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                      // ✅ Navigate to Update Profile Page on tap
-                      // GestureDetector(
-                      //   onTap: () {
-                      //     Navigator.push(
-                      //       context,
-                      //       MaterialPageRoute(
-                      //         builder: (context) => const EditProfilePage(),
-                      //       ),
-                      //     );
-                      //   },
-                      //   child: CircleAvatar(
-                      //     radius: 15,
-                      //     backgroundColor: Colors.white,
-                      //     child: Icon(Icons.edit, color: green, size: 18),
-                      //   ),
-                      // ),
+                      borderRadius: const BorderRadius.only(
+                        bottomLeft: Radius.circular(24),
+                        bottomRight: Radius.circular(24),
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Stack(
+                          alignment: Alignment.bottomRight,
+                          children: [
+                            Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 3),
+                              ),
+                              child: CircleAvatar(
+                                radius: 45,
+                                backgroundColor: Colors.white,
+                                backgroundImage: profileImage,
+                                child: profileImage == null
+                                    ? const Icon(
+                                        Icons.person,
+                                        size: 50,
+                                        color: Colors.grey,
+                                      )
+                                    : null,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          profileName ?? user?.displayName ?? "Guest User",
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          user?.email ?? "No email available",
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: Colors.white70,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // Quick Action Buttons
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(
+                      children: [
+                        _QuickActionButton(
+                          icon: Icons.edit_note_rounded,
+                          label: "Edit Profile",
+                          onTap: () async {
+                            final updated = await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const EditProfilePage(),
+                              ),
+                            );
+
+                            if (updated == true) {
+                              _refreshUser();
+                            }
+                          },
+                        ),
+                        const SizedBox(width: 12),
+                        _QuickActionButton(
+                          icon: Icons.list_alt_rounded,
+                          label: "Change Survey",
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const SurveyForm(),
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(width: 12),
+                        _QuickActionButton(
+                          icon: Icons.workspace_premium_rounded,
+                          label: "Subscription",
+                          onTap: () {},
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // Settings Section
+                  _SettingsCard(
+                    title: "Settings",
+                    items: const [
+                      _SettingsItem(icon: Icons.notifications_none, label: "Notifications"),
+                      _SettingsItem(icon: Icons.lock_outline, label: "Privacy"),
+                      _SettingsItem(icon: Icons.help_outline, label: "Help & Support"),
+                      _SettingsItem(icon: Icons.info_outline, label: "About App"),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  Text(
-                    user?.displayName ?? "Guest User",
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    user?.email ?? "No email available",
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: Colors.white70,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: green,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30),
+
+                  // Logout Button
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        await FirebaseAuth.instance.signOut();
+                        if (context.mounted) {
+                          Navigator.pushReplacementNamed(context, '/login');
+                        }
+                      },
+                      icon: const Icon(Icons.logout_rounded),
+                      label: const Text("Log Out"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size.fromHeight(48),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                     ),
-                    onPressed: () {
-                      // handle subscription click
-                    },
-                    child: const Text("Upgrade to Premium"),
                   ),
                 ],
               ),
             ),
 
-            const SizedBox(height: 20),
-
-            // 🔹 Quick Action Buttons
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  _QuickActionButton(
-                    icon: Icons.edit_note_rounded,
-                    label: "Edit Profile",
-                    // ✅ Navigate to update page
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const EditProfilePage(),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(width: 12),
-                  _QuickActionButton(
-                    icon: Icons.list_alt_rounded,
-                    label: "Change Survey",
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const SurveyForm(),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(width: 12),
-                  _QuickActionButton(
-                    icon: Icons.workspace_premium_rounded,
-                    label: "Subscription",
-                    onTap: () {},
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // 🔹 Settings Section
-            _SettingsCard(title: "Settings", items: const [
-              _SettingsItem(icon: Icons.notifications_none, label: "Notifications"),
-              _SettingsItem(icon: Icons.lock_outline, label: "Privacy"),
-              _SettingsItem(icon: Icons.help_outline, label: "Help & Support"),
-              _SettingsItem(icon: Icons.info_outline, label: "About App"),
-            ]),
-
-            // 🔹 Logout Button
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
-              child: ElevatedButton.icon(
-                onPressed: () async {
-                  await FirebaseAuth.instance.signOut();
-                  if (context.mounted) {
-                    Navigator.pushReplacementNamed(context, '/login');
-                  }
-                },
-                icon: const Icon(Icons.logout_rounded),
-                label: const Text("Log Out"),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.redAccent,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size.fromHeight(48),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-
-      // ✅ Bottom Navigation
+      // Bottom Navigation
       bottomNavigationBar: BottomNavBar(
         currentIndex: _currentIndex,
         onTap: (index) {
           setState(() => _currentIndex = index);
-          if (index == 0) {
-            Navigator.pushNamed(context, '/inventory');
-          } else if (index == 1) {
-            Navigator.pushNamed(context, '/recipes');
-          } else if (index == 2) {
-            Navigator.pushNamed(context, '/userinventory');
-          } else if (index == 3) {
-            // already here
-          }
+          if (index == 0) Navigator.pushNamed(context, '/inventory');
+          if (index == 1) Navigator.pushNamed(context, '/recipes');
+          if (index == 2) Navigator.pushNamed(context, '/userinventory');
         },
       ),
     );
   }
 }
 
-// --- UI Components ---
+// ------------------- UI Helper Widgets -------------------
 
 class _QuickActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+
   const _QuickActionButton({
     required this.icon,
     required this.label,
@@ -249,7 +282,10 @@ class _QuickActionButton extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 label,
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
               ),
             ],
           ),
@@ -262,6 +298,7 @@ class _QuickActionButton extends StatelessWidget {
 class _SettingsCard extends StatelessWidget {
   final String title;
   final List<_SettingsItem> items;
+
   const _SettingsCard({required this.title, required this.items});
 
   @override
@@ -288,7 +325,10 @@ class _SettingsCard extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
                   ),
                 ],
               ),
@@ -305,6 +345,7 @@ class _SettingsCard extends StatelessWidget {
 class _SettingsItem extends StatelessWidget {
   final IconData icon;
   final String label;
+
   const _SettingsItem({required this.icon, required this.label});
 
   @override

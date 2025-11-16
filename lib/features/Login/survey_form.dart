@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:sust_ai_n/features/account/pages/account_page.dart';
 import 'package:sust_ai_n/features/home/inventory/inventory_tab.dart';
 
 User? user = FirebaseAuth.instance.currentUser;
@@ -33,6 +32,7 @@ class _SurveyForm extends State<SurveyForm> {
     'Keto',
     'Lactose Intolerant',
     'Pescatarian',
+    'None',
   ];
 
   final List<String> cuisineOptions = [
@@ -42,6 +42,7 @@ class _SurveyForm extends State<SurveyForm> {
     'Mexican',
     'Fast Food',
     'Japanese',
+    'Other',
   ];
 
   List<String> selectedDietary = [];
