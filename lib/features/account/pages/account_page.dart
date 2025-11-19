@@ -172,7 +172,7 @@ class _AccountPageState extends State<AccountPage> {
                         const SizedBox(width: 12),
                         _QuickActionButton(
                           icon: Icons.list_alt_rounded,
-                          label: "Change Survey",
+                          label: "Change Preference",
                           onTap: () {
                             Navigator.push(
                               context,
@@ -182,12 +182,12 @@ class _AccountPageState extends State<AccountPage> {
                             );
                           },
                         ),
-                        const SizedBox(width: 12),
-                        _QuickActionButton(
-                          icon: Icons.workspace_premium_rounded,
-                          label: "Subscription",
-                          onTap: () {},
-                        ),
+                        // const SizedBox(width: 12),
+                        // _QuickActionButton(
+                        //   icon: Icons.workspace_premium_rounded,
+                        //   label: "Subscription",
+                        //   onTap: () {},
+                        // ),
                       ],
                     ),
                   ),

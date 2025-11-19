@@ -39,15 +39,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
         if (docSnapshot.exists) {
           final data = docSnapshot.data();
           
-          // Load name from Firestore nested structure
           _nameController.text = data?["profile"]?["info"]?["name"] ?? 
                                  user.displayName ?? 
                                  '';
           
-          // Load photo from Firestore nested structure
           cachedBase64 = data?["profile"]?["info"]?["photoUrl"];
         } else {
-          // Fallback to Firebase Auth
           _nameController.text = user.displayName ?? '';
         }
         
@@ -118,7 +115,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
         "profile": {
           "info": {
             "name": _nameController.text.trim(),
-            "photoUrl": cachedBase64, // Can be null if no image
+            "photoUrl": cachedBase64,
             "email": user.email,
             "uid": user.uid,
             "lastUpdated": FieldValue.serverTimestamp(),
