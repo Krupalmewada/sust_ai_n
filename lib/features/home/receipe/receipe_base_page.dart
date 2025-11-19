@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:sust_ai_n/features/home/receipe/favorites_page.dart';
+import 'package:sust_ai_n/features/home/receipe/saved_page.dart';
 
 import '../../../widgets/bottom_nav_bar.dart';
 import '../../../widgets/inventory_tab_selector.dart';
@@ -278,8 +280,8 @@ class _RecipesContainerState extends State<RecipesContainer> {
               inventoryItems: widget.inventoryItems,
             )
                 : _selectedFilter == 1
-                ? const Center(child: Text("⭐ Favorite Recipes"))
-                : const Center(child: Text("📝 Added Recipes")),
+                ? const FavoritesPage()
+                : const SavedPage(),
           ),
         ),
       ],

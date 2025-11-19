@@ -368,7 +368,6 @@ class _ResultSheetState extends State<_ResultSheet> {
           name: it.name,
           qty: it.qty,
           unit: it.unit,
-          expiryDate: DateTime.now().add(const Duration(days: 7)),
           sourceType: 'Scan',
         );
       }

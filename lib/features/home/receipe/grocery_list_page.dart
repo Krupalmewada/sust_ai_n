@@ -15,19 +15,6 @@ class GroceryListPageState extends State<GroceryListPage> {
   void searchGrocery(String query) => setState(() => _query = query);
   void clearSearch() => setState(() => _query = '');
 
-  // 🧩 Emoji mapping for categories
-  final Map<String, String> categoryEmojis = {
-    'Vegetables': '🥬',
-    'Dairy': '🧈',
-    'Proteins': '🍗',
-    'Condiments': '🧂',
-    'Snacks': '🍿',
-    'Beverages': '🥤',
-    'Fruits': '🍎',
-    'Meat': '🥩',
-    'Other': '🧺',
-  };
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -43,7 +30,7 @@ class GroceryListPageState extends State<GroceryListPage> {
             return const Center(child: Text("🛒 Your grocery list is empty"));
           }
 
-          // Filter categories and items based on search query
+          // Filter categories and items
           final Map<String, List<Map<String, dynamic>>> data = {};
           snapshot.data!.forEach((category, items) {
             final filtered = _query.isEmpty
@@ -54,6 +41,7 @@ class GroceryListPageState extends State<GroceryListPage> {
                 .toLowerCase()
                 .contains(_query.toLowerCase()))
                 .toList();
+
             if (filtered.isNotEmpty) data[category] = filtered;
           });
 
@@ -61,10 +49,8 @@ class GroceryListPageState extends State<GroceryListPage> {
             physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             children: data.entries.map((entry) {
-              final emoji = categoryEmojis[entry.key] ?? '🧺'; // 👈 auto pick
               return _ExpandableCategory(
                 category: entry.key,
-                emoji: emoji,
                 items: entry.value,
                 onDelete: (id) => _service.deleteItem(id),
               );
@@ -73,24 +59,11 @@ class GroceryListPageState extends State<GroceryListPage> {
         },
       ),
 
-      // ✅ Floating Action Button (for adding new grocery item)
+      // Add new grocery item
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
           final nameController = TextEditingController();
           final qtyController = TextEditingController();
-          String? selectedCategory; // 👈 start as null (no default)
-
-          final List<String> categories = [
-            'Vegetables',
-            'Dairy',
-            'Proteins',
-            'Condiments',
-            'Snacks',
-            'Beverages',
-            'Fruits',
-            'Meat',
-            'Other',
-          ];
 
           await showDialog(
             context: context,
@@ -108,21 +81,6 @@ class GroceryListPageState extends State<GroceryListPage> {
                     controller: qtyController,
                     decoration: const InputDecoration(labelText: "Quantity"),
                   ),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    value: selectedCategory,
-                    decoration: const InputDecoration(
-                      labelText: "Category",
-                      hintText: "Select category",
-                    ),
-                    items: categories
-                        .map((cat) => DropdownMenuItem(
-                      value: cat,
-                      child: Text(cat),
-                    ))
-                        .toList(),
-                    onChanged: (v) => selectedCategory = v,
-                  ),
                 ],
               ),
               actions: [
@@ -137,22 +95,15 @@ class GroceryListPageState extends State<GroceryListPage> {
                         ? "1"
                         : qtyController.text.trim();
 
-                    // ⚠️ Validate all fields
                     if (name.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('⚠️ Please enter item name')),
+                        const SnackBar(
+                            content: Text('⚠️ Please enter item name')),
                       );
                       return;
                     }
 
-                    if (selectedCategory == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('⚠️ Please select a category')),
-                      );
-                      return;
-                    }
-
-                    await _service.addItem(name, qty, selectedCategory!);
+                    await _service.addCategorizedItem(name, qty);
                     Navigator.pop(context);
                   },
                   child: const Text("Add"),
@@ -168,17 +119,17 @@ class GroceryListPageState extends State<GroceryListPage> {
   }
 }
 
-// ---------------- Category Component ----------------
+// ---------------------------------------------------------------------------
+// CATEGORY SECTION
+// ---------------------------------------------------------------------------
 
 class _ExpandableCategory extends StatefulWidget {
   final String category;
-  final String emoji;
   final List<Map<String, dynamic>> items;
   final Function(String id) onDelete;
 
   const _ExpandableCategory({
     required this.category,
-    required this.emoji,
     required this.items,
     required this.onDelete,
   });
@@ -211,16 +162,9 @@ class _ExpandableCategoryState extends State<_ExpandableCategory> {
           initiallyExpanded: _expanded,
           onExpansionChanged: (v) => setState(() => _expanded = v),
           tilePadding: const EdgeInsets.symmetric(horizontal: 12),
-          title: Row(
-            children: [
-              Text(widget.emoji, style: const TextStyle(fontSize: 22)),
-              const SizedBox(width: 8),
-              Text(
-                widget.category,
-                style: const TextStyle(
-                    fontWeight: FontWeight.bold, fontSize: 17),
-              ),
-            ],
+          title: Text(
+            widget.category,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
           ),
           children: widget.items.map((item) {
             return Padding(
@@ -229,20 +173,36 @@ class _ExpandableCategoryState extends State<_ExpandableCategory> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      Icon(Icons.radio_button_off,
-                          size: 18, color: Colors.grey.shade700),
-                      const SizedBox(width: 10),
-                      Text(item['name'] ?? '',
-                          style: const TextStyle(fontSize: 15)),
-                    ],
+                  // LEFT SIDE (icon + name with overflow fix)
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Icon(Icons.radio_button_off,
+                            size: 18, color: Colors.grey.shade700),
+                        const SizedBox(width: 10),
+
+                        // ✔ Prevent overflow
+                        Flexible(
+                          child: Text(
+                            item['name'] ?? '',
+                            style: const TextStyle(fontSize: 15),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+
+                  // RIGHT SIDE (qty + delete)
                   Row(
                     children: [
-                      Text(item['qty'] ?? '',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w500, fontSize: 14)),
+                      Text(
+                        item['qty'] ?? '',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w500, fontSize: 14),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       const SizedBox(width: 8),
                       GestureDetector(
                         onTap: () => widget.onDelete(item['id']),
