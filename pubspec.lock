@@ -264,14 +264,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.3.2"
-  google_mlkit_barcode_scanning:
-    dependency: "direct main"
-    description:
-      name: google_mlkit_barcode_scanning
-      sha256: "1b4327f9dce15cf64384aeb17012a61601c81c6aaeb495bd7df5f6c83e65c930"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.11.1"
   google_mlkit_commons:
     dependency: transitive
     description:
@@ -384,14 +376,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.2.2"
-  json_annotation:
-    dependency: transitive
-    description:
-      name: json_annotation
-      sha256: "1ce844379ca14835a50d2f019a3099f419082cfdd231cd86a142af94dd5c6bb1"
-      url: "https://pub.dev"
-    source: hosted
-    version: "4.9.0"
   leak_tracker:
     dependency: transitive
     description:
@@ -464,14 +448,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.0"
-  openfoodfacts:
-    dependency: "direct main"
-    description:
-      name: openfoodfacts
-      sha256: fa136e570e5751286882d4e62bcbfe1173df75f98c12dc7247eb89c7aeba8fa5
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.10.1"
   path:
     dependency: transitive
     description:
