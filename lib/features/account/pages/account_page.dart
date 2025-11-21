@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:sust_ai_n/features/account/pages/edit_profile.dart';
+import 'change_password.dart';
 import '../../../widgets/bottom_nav_bar.dart';
 import '../../Login/survey_form.dart';
 
@@ -27,11 +28,10 @@ class _AccountPageState extends State<AccountPage> {
 
   Future<void> _refreshUser() async {
     setState(() => _isLoading = true);
-    
+
     await FirebaseAuth.instance.currentUser?.reload();
     user = FirebaseAuth.instance.currentUser;
 
-    // Fetch profile data from Firestore
     if (user != null) {
       try {
         final docSnapshot = await FirebaseFirestore.instance
@@ -59,10 +59,9 @@ class _AccountPageState extends State<AccountPage> {
     final theme = Theme.of(context);
     final green = Colors.green.shade600;
 
-    // Determine profile image
     ImageProvider? profileImage;
-    if (profilePhotoBase64 != null && 
-        profilePhotoBase64!.isNotEmpty && 
+    if (profilePhotoBase64 != null &&
+        profilePhotoBase64!.isNotEmpty &&
         profilePhotoBase64 != "null") {
       try {
         profileImage = MemoryImage(base64Decode(profilePhotoBase64!));
@@ -82,16 +81,17 @@ class _AccountPageState extends State<AccountPage> {
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
-
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               child: Column(
                 children: [
-                  // Profile Header
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 24,
+                      horizontal: 20,
+                    ),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [green, Colors.green.shade300],
@@ -111,7 +111,10 @@ class _AccountPageState extends State<AccountPage> {
                             Container(
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white, width: 3),
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 3,
+                                ),
                               ),
                               child: CircleAvatar(
                                 radius: 45,
@@ -148,7 +151,6 @@ class _AccountPageState extends State<AccountPage> {
 
                   const SizedBox(height: 20),
 
-                  // Quick Action Buttons
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Row(
@@ -188,18 +190,42 @@ class _AccountPageState extends State<AccountPage> {
 
                   const SizedBox(height: 20),
 
-                  // Settings Section
                   _SettingsCard(
                     title: "Settings",
-                    items: const [
-                      _SettingsItem(icon: Icons.notifications_none, label: "Notifications"),
-                      _SettingsItem(icon: Icons.lock_outline, label: "Privacy"),
-                      _SettingsItem(icon: Icons.help_outline, label: "Help & Support"),
-                      _SettingsItem(icon: Icons.info_outline, label: "About App"),
+                    items: [
+                      _SettingsItem(
+                        icon: Icons.notifications_none,
+                        label: "Notifications",
+                        onTap: () {
+                        },
+                      ),
+                      _SettingsItem(
+                        icon: Icons.lock_outline,
+                        label: "Privacy",
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ChangePasswordPage(),
+                            ),
+                          );
+                        },
+                      ),
+                      _SettingsItem(
+                        icon: Icons.help_outline,
+                        label: "Help & Support",
+                        onTap: () {
+                        },
+                      ),
+                      _SettingsItem(
+                        icon: Icons.info_outline,
+                        label: "About App",
+                        onTap: () {
+                        },
+                      ),
                     ],
                   ),
 
-                  // Logout Button
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
                     child: ElevatedButton.icon(
@@ -225,7 +251,6 @@ class _AccountPageState extends State<AccountPage> {
               ),
             ),
 
-      // Bottom Navigation
       bottomNavigationBar: BottomNavBar(
         currentIndex: _currentIndex,
         onTap: (index) {
@@ -238,8 +263,6 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 }
-
-// ------------------- UI Helper Widgets -------------------
 
 class _QuickActionButton extends StatelessWidget {
   final IconData icon;
@@ -339,8 +362,9 @@ class _SettingsCard extends StatelessWidget {
 class _SettingsItem extends StatelessWidget {
   final IconData icon;
   final String label;
+  final VoidCallback? onTap;
 
-  const _SettingsItem({required this.icon, required this.label});
+  const _SettingsItem({required this.icon, required this.label, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -351,7 +375,7 @@ class _SettingsItem extends StatelessWidget {
         style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
       ),
       trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
-      onTap: () {},
+      onTap: onTap,
     );
   }
 }
