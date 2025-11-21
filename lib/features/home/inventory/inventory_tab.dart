@@ -172,6 +172,7 @@ class _InventoryTabState extends State<InventoryTab> {
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final width = size.width;
+    final user = _auth.currentUser;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9F9F9),
@@ -187,7 +188,7 @@ class _InventoryTabState extends State<InventoryTab> {
                 children: [
                   Flexible(
                     child: Text(
-                      "Hi Krupal,\nHere’s what you have!",
+                      "Hi ${user?.displayName ?? 'User'},\nHere’s what you have!",
                       style: TextStyle(
                         fontSize: width * 0.055,
                         fontWeight: FontWeight.w600,
