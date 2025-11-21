@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:sust_ai_n/features/home/inventory/inventory_tab.dart';
+import 'create_account.dart';
 import 'survey_form.dart';
 
 User? user;
@@ -34,10 +35,11 @@ class _UserLoginState extends State<UserLogin> {
     setState(() => _isLoading = true);
 
     try {
-      final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text.trim().toLowerCase(),
-        password: _passwordController.text,
-      );
+      final userCredential = await FirebaseAuth.instance
+          .signInWithEmailAndPassword(
+            email: _emailController.text.trim().toLowerCase(),
+            password: _passwordController.text,
+          );
       user = userCredential.user;
 
       if (user != null) {
@@ -45,19 +47,26 @@ class _UserLoginState extends State<UserLogin> {
       }
     } on FirebaseAuthException catch (e) {
       String message = 'Login failed';
-      if (e.code == 'user-not-found') message = 'No user found with this email';
-      else if (e.code == 'wrong-password') message = 'Incorrect password';
-      else if (e.code == 'invalid-email') message = 'Invalid email address';
-
+      if (e.code == 'user-not-found') {
+        message = 'No user found with this email';
+      } else if (e.code == 'wrong-password') {
+        message = 'Incorrect password';
+      } else if (e.code == 'invalid-email') {
+        message = 'Invalid email address';
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(message), backgroundColor: Colors.red),
         );
       }
     } catch (e) {
+      print(e);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Sign-In failed: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Sign-In failed:'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -75,23 +84,30 @@ class _UserLoginState extends State<UserLogin> {
         return;
       }
 
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
 
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      final userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+      final userCredential = await FirebaseAuth.instance.signInWithCredential(
+        credential,
+      );
       user = userCredential.user;
 
       if (user != null) {
         await _checkUserAndNavigate();
       }
     } catch (e) {
+      print(e);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Google Sign-In failed: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Google Sign-In failed:'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -102,37 +118,59 @@ class _UserLoginState extends State<UserLogin> {
   Future<void> _checkUserAndNavigate() async {
     if (user == null) return;
 
-    final userDoc = FirebaseFirestore.instance.collection('users').doc(user!.uid);
-    final snapshot = await userDoc.get();
+    final userDocRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user!.uid);
 
-    if (!snapshot.exists) {
-      await userDoc.set({
-        'profile': {
-          'info': {
-            'name': user!.displayName ?? 'No name',
-            'email': user!.email?.toLowerCase(),
-            'photoUrl': user!.photoURL,
-            'uid': user!.uid,
-            'createdAt': FieldValue.serverTimestamp(),
-            'lastLogin': FieldValue.serverTimestamp(),
+    try {
+      var snapshot = await userDocRef.get();
+
+      if (!snapshot.exists) {
+        await userDocRef.set({
+          'profile': {
+            'info': {
+              'name': user!.displayName ?? 'No name',
+              'email': user!.email?.toLowerCase(),
+              'photoUrl': user!.photoURL,
+              'uid': user!.uid,
+              'createdAt': FieldValue.serverTimestamp(),
+              'lastLogin': FieldValue.serverTimestamp(),
+            },
           },
-        },
-      });
-    } else {
-      await userDoc.update({
-        'profile.info.lastLogin': FieldValue.serverTimestamp(),
-      });
-    }
+        }, SetOptions(merge: true));
 
-    final surveyExists = snapshot.exists && snapshot.data()?['profile']?['survey'] != null;
+        snapshot = await userDocRef.get();
+      } else {
+        await userDocRef.set({
+          'profile': {
+            'info': {'lastLogin': FieldValue.serverTimestamp()},
+          },
+        }, SetOptions(merge: true));
 
-    if (mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => surveyExists ? InventoryTab() : const SurveyForm(),
-        ),
-      );
+        snapshot = await userDocRef.get();
+      }
+
+      final surveyExists =
+          snapshot.exists && snapshot.data()?['profile']?['survey'] != null;
+
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                surveyExists ? const InventoryTab() : const SurveyForm(),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Navigation error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -153,12 +191,20 @@ class _UserLoginState extends State<UserLogin> {
               const SizedBox(height: 16),
               const Text(
                 'sustAIn',
-                style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.green),
+                style: TextStyle(
+                  fontSize: 36,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green,
+                ),
               ),
               const SizedBox(height: 8),
               const Text(
                 'A World Without Waste',
-                style: TextStyle(fontSize: 18, color: Colors.green, fontWeight: FontWeight.w500),
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Colors.green,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
               const SizedBox(height: 40),
 
@@ -173,14 +219,30 @@ class _UserLoginState extends State<UserLogin> {
                       decoration: InputDecoration(
                         labelText: 'Email',
                         hintText: 'Enter your email',
-                        prefixIcon: const Icon(Icons.email_outlined, color: Colors.green),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey[300]!)),
-                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.green, width: 2)),
+                        prefixIcon: const Icon(
+                          Icons.email_outlined,
+                          color: Colors.green,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Colors.green,
+                            width: 2,
+                          ),
+                        ),
                       ),
                       validator: (value) {
-                        if (value == null || value.isEmpty) return 'Please enter your email';
-                        if (!value.contains('@')) return 'Please enter a valid email';
+                        if (value == null || value.isEmpty)
+                          return 'Please enter your email';
+                        if (!value.contains('@'))
+                          return 'Please enter a valid email';
                         return null;
                       },
                     ),
@@ -191,18 +253,41 @@ class _UserLoginState extends State<UserLogin> {
                       decoration: InputDecoration(
                         labelText: 'Password',
                         hintText: 'Enter your password',
-                        prefixIcon: const Icon(Icons.lock_outline, color: Colors.green),
-                        suffixIcon: IconButton(
-                          icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility, color: Colors.grey),
-                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                        prefixIcon: const Icon(
+                          Icons.lock_outline,
+                          color: Colors.green,
                         ),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey[300]!)),
-                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.green, width: 2)),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                            color: Colors.grey,
+                          ),
+                          onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword,
+                          ),
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Colors.green,
+                            width: 2,
+                          ),
+                        ),
                       ),
                       validator: (value) {
-                        if (value == null || value.isEmpty) return 'Please enter your password';
-                        if (value.length < 6) return 'Password must be at least 6 characters';
+                        if (value == null || value.isEmpty)
+                          return 'Please enter your password';
+                        if (value.length < 8)
+                          return 'Password must be at least 8 characters';
                         return null;
                       },
                     ),
@@ -219,9 +304,18 @@ class _UserLoginState extends State<UserLogin> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green,
                         minimumSize: const Size(double.infinity, 50),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                      child: const Text('Login', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      child: const Text(
+                        'Login',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
 
               const SizedBox(height: 20),
@@ -231,7 +325,13 @@ class _UserLoginState extends State<UserLogin> {
                   Expanded(child: Divider(color: Colors.grey[400])),
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16),
-                    child: Text('OR', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
+                    child: Text(
+                      'OR',
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                   ),
                   Expanded(child: Divider(color: Colors.grey[400])),
                 ],
@@ -246,10 +346,19 @@ class _UserLoginState extends State<UserLogin> {
                       style: OutlinedButton.styleFrom(
                         minimumSize: const Size(double.infinity, 50),
                         side: BorderSide(color: Colors.grey[300]!),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                      icon: const Icon(Icons.g_mobiledata, size: 32, color: Colors.red),
-                      label: const Text('Continue with Google', style: TextStyle(fontSize: 16)),
+                      icon: const Icon(
+                        Icons.g_mobiledata,
+                        size: 32,
+                        color: Colors.red,
+                      ),
+                      label: const Text(
+                        'Continue with Google',
+                        style: TextStyle(fontSize: 16),
+                      ),
                     ),
 
               const SizedBox(height: 20),
@@ -259,6 +368,32 @@ class _UserLoginState extends State<UserLogin> {
                 style: TextStyle(color: Colors.grey, fontSize: 12),
               ),
               const SizedBox(height: 20),
+
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: double.infinity,
+                child: TextButton(
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    backgroundColor: Colors.green.withOpacity(0.1),
+                    foregroundColor: Colors.green,
+                  ),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const CreateAccount()),
+                    );
+                  },
+                  child: const Text(
+                    "Don't have an account? Create one",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
             ],
           ),
         ),
@@ -266,4 +401,3 @@ class _UserLoginState extends State<UserLogin> {
     );
   }
 }
-

@@ -3,8 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:sust_ai_n/features/home/inventory/inventory_tab.dart';
 
-User? user = FirebaseAuth.instance.currentUser;
-
 class SurveyForm extends StatefulWidget {
   const SurveyForm({super.key});
 
@@ -48,7 +46,6 @@ class _SurveyForm extends State<SurveyForm> {
   List<String> selectedDietary = [];
   List<String> selectedCuisines = [];
 
-  // Error messages
   String? _adultError;
   String? _kidsError;
   String? _familyError;
@@ -57,10 +54,7 @@ class _SurveyForm extends State<SurveyForm> {
   String? _spendingError;
   String? _frequencyError;
 
-  // loader flag
   bool _isLoading = true;
-
-  // Edit mode flag
   bool _isEditMode = false;
 
   @override
@@ -68,7 +62,6 @@ class _SurveyForm extends State<SurveyForm> {
     super.initState();
     _loadSurveyData();
 
-    // Validate on focus lost
     _adultFocus.addListener(() {
       if (!_adultFocus.hasFocus) {
         setState(() {
@@ -404,21 +397,18 @@ class _SurveyForm extends State<SurveyForm> {
       }
 
       if (!hasError) {
-      submitSurveyToFirestore().then((_) {
-        if (!_isEditMode) {
-          Navigator.pop(
+        submitSurveyToFirestore().then((_) {
+          Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (_) => InventoryTab()),
+            MaterialPageRoute(builder: (_) => const InventoryTab()),
           );
-        }else{
-          Navigator.pop(context);
-        }
-      });
-    }
-  });
-}
+        });
+      }
+    });
+  }
 
   Future<void> submitSurveyToFirestore() async {
+    final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
     final surveyData = {
@@ -432,21 +422,19 @@ class _SurveyForm extends State<SurveyForm> {
       'submittedAt': FieldValue.serverTimestamp(),
     };
 
-    await FirebaseFirestore.instance.collection('users').doc(user!.uid).set({
+    await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
       'profile': {'survey': surveyData},
     }, SetOptions(merge: true));
   }
 
   Future<void> _loadSurveyData() async {
+    final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       setState(() => _isLoading = false);
       return;
     }
 
-    final doc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user!.uid)
-        .get();
+    final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
 
     if (!doc.exists) {
       setState(() => _isLoading = false);

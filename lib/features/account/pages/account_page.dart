@@ -182,12 +182,6 @@ class _AccountPageState extends State<AccountPage> {
                             );
                           },
                         ),
-                        // const SizedBox(width: 12),
-                        // _QuickActionButton(
-                        //   icon: Icons.workspace_premium_rounded,
-                        //   label: "Subscription",
-                        //   onTap: () {},
-                        // ),
                       ],
                     ),
                   ),
