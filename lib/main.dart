@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:sust_ai_n/features/account/pages/account_page.dart';
 import 'package:sust_ai_n/features/home/User_inventory/user_inventory_page.dart';
 import 'features/chatbot/chat_page.dart';
@@ -20,6 +21,7 @@ Future<void> main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  await dotenv.load(fileName: "assets/keys.env");
   runApp(const MyApp());
 }
 

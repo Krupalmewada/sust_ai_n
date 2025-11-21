@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -19,8 +20,7 @@ class _InventoryTabState extends State<InventoryTab> {
   final InventoryService _inventoryService = InventoryService();
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final String _apiKey = '**';
-
+  late final String _apiKey;
   bool _isLoadingRecipes = false;
 
   Map<String, int> _categoryCounts = {};
@@ -34,6 +34,7 @@ class _InventoryTabState extends State<InventoryTab> {
     _listenToInventory();
     _fetchTopRecipes();
     _listenToLastPurchased();
+    _apiKey = dotenv.env['SpoonacularapiKey'] ?? '';
   }
 
   /// 🔹 Listen to inventory for chart data
@@ -344,7 +345,7 @@ class _InventoryTabState extends State<InventoryTab> {
                                               width: width * 0.12,
                                               fit: BoxFit.cover,
                                               errorBuilder: (_, __, ___) => Image.asset(
-                                                'lib/assets/diet.png',
+                                                'assets/images/diet.png',
                                                 height: width * 0.12,
                                                 width: width * 0.12,
                                                 fit: BoxFit.contain,
@@ -354,7 +355,7 @@ class _InventoryTabState extends State<InventoryTab> {
                                         } else {
                                           // ✅ Fallback to your local asset
                                           return Image.asset(
-                                            'lib/assets/diet.png',
+                                            'assets/images/diet.png',
                                             height: width * 0.12,
                                             width: width * 0.12,
                                             fit: BoxFit.contain,
@@ -444,38 +445,95 @@ class _InventoryTabState extends State<InventoryTab> {
                       ),
                       child: Column(
                         children: [
-                          ClipRRect(
-                            borderRadius:
-                            const BorderRadius.vertical(top: Radius.circular(20)),
-                            child: image.isNotEmpty
-                                ? Image.network(image,
-                                width: double.infinity,
-                                height: width * 0.35,
-                                fit: BoxFit.cover)
-                                : Container(
-                              height: width * 0.35,
-                              color: const Color(0xFFF4F4F4),
-                              child: Center(
-                                child: Text(_getFallbackEmoji(title),
-                                    style: TextStyle(fontSize: width * 0.14)),
+                          Stack(
+                            children: [
+                              // ================= IMAGE =================
+                              ClipRRect(
+                                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                                child: image.isNotEmpty
+                                    ? Image.network(
+                                    image,
+                                    width: double.infinity,
+                                    height: width * 0.35,
+                                    fit: BoxFit.cover)
+                                    : Container(
+                                  height: width * 0.35,
+                                  color: const Color(0xFFF4F4F4),
+                                  child: Center(
+                                    child: Text(_getFallbackEmoji(title),
+                                        style: TextStyle(fontSize: width * 0.14)),
+                                  ),
+                                ),
                               ),
-                            ),
+
+                              // ================= ICONS (LIKE + ADD) =================
+                              Positioned(
+                                right: 10,
+                                top: 10,
+                                child: Row(
+                                  children: [
+                                    // ❤️ LIKE
+                                    InkWell(
+                                      onTap: () async {
+                                        await _inventoryService.likeRecipe(recipe);
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text("Recipe added to Liked ❤️"))
+                                        );
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white70,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(Icons.favorite_border, color: Colors.red),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+
+                                    // ➕ ADD
+                                    InkWell(
+                                      onTap: () async {
+                                        await _inventoryService.saveRecipe(recipe);
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text("Recipe saved 📌"))
+                                        );
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white70,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(Icons.add, color: Colors.black),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
+
+                          // ================= TEXT =================
                           Padding(
                             padding: EdgeInsets.all(width * 0.03),
                             child: Column(
                               children: [
-                                Text(title,
-                                    textAlign: TextAlign.center,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                        fontSize: width * 0.04,
-                                        fontWeight: FontWeight.w600)),
+                                Text(
+                                  title,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: width * 0.04,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                                 SizedBox(height: width * 0.02),
-                                Text("Servings: $servings",
-                                    style: TextStyle(
-                                        color: Colors.grey, fontSize: width * 0.03)),
+                                Text(
+                                  "Servings: $servings",
+                                  style: TextStyle(color: Colors.grey, fontSize: width * 0.03),
+                                ),
                               ],
                             ),
                           ),

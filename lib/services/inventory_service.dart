@@ -1,12 +1,18 @@
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 
 /// InventoryService — combines Spoonacular metadata + USDA FoodKeeper shelf-life estimation.
 class InventoryService {
-  static const String _spoonacularKey = '**';
+  late final String _spoonacularKey;
+
+  InventoryService() {
+    _spoonacularKey = dotenv.env['SpoonacularapiKey'] ?? '';
+  }
+
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -137,7 +143,162 @@ class InventoryService {
 
 
 
+  Future<void> likeRecipe(Map<String, dynamic> recipe) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
 
+    final uid = user.uid;
+
+    // Path for liked recipe
+    final path = "users/$uid/recipe/liked/${recipe['id']}";
+    print("📌 Writing liked recipe to -> $path");
+
+    final data = {
+      'id': recipe['id'],
+      'title': recipe['title'],
+      'image': recipe['image'],
+      'servings': recipe['servings'],
+      'timestamp': FieldValue.serverTimestamp(),
+    };
+
+    try {
+      await _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('recipe')
+          .doc('liked')       // parent doc
+          .collection('items') // subcollection
+          .doc(recipe['id'].toString())
+          .set(data);
+
+      print("❤️ SUCCESS: Liked recipe saved → ${recipe['id']}");
+    } catch (e) {
+      print("❌ FIRESTORE WRITE FAILED → $e");
+    }
+  }
+
+
+  Future<void> saveRecipe(Map<String, dynamic> recipe) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    final uid = user.uid;
+
+    final data = {
+      'id': recipe['id'],
+      'title': recipe['title'],
+      'image': recipe['image'],
+      'servings': recipe['servings'],
+      'timestamp': FieldValue.serverTimestamp(),
+    };
+
+    try {
+      await _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('recipe')
+          .doc('saved')
+          .collection('items')
+          .doc(recipe['id'].toString())
+          .set(data);
+
+      print("📌 SUCCESS: Saved recipe → ${recipe['id']}");
+    } catch (e) {
+      print("❌ FIRESTORE WRITE FAILED → $e");
+    }
+  }
+
+
+
+
+
+
+  Future<List<Map<String, dynamic>>> fetchLikedRecipes() async {
+    final uid = _auth.currentUser!.uid;
+
+    final snap = await _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('recipe')
+        .doc('liked')
+        .collection('items')
+        .orderBy('timestamp', descending: true)
+        .get();
+
+    return snap.docs.map((d) => d.data()).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> fetchSavedRecipes() async {
+    final uid = _auth.currentUser!.uid;
+
+    final snap = await _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('recipe')
+        .doc('saved')
+        .collection('items')
+        .orderBy('timestamp', descending: true)
+        .get();
+
+    return snap.docs.map((d) => d.data()).toList();
+  }
+
+  Future<bool> isRecipeLiked(int id) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return false;
+
+    final snap = await _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('recipe')
+        .doc('liked')
+        .collection('items')
+        .doc(id.toString())
+        .get();
+
+    return snap.exists;
+  }
+
+  Future<bool> isRecipeSaved(int id) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return false;
+
+    final snap = await _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('recipe')
+        .doc('saved')
+        .collection('items')
+        .doc(id.toString())
+        .get();
+
+    return snap.exists;
+  }
+  Future<void> unlikeRecipe(int id) async {
+    final uid = _auth.currentUser!.uid;
+
+    await _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('recipe')
+        .doc('liked')
+        .collection('items')
+        .doc(id.toString())
+        .delete();
+  }
+
+  Future<void> unsaveRecipe(int id) async {
+    final uid = _auth.currentUser!.uid;
+
+    await _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('recipe')
+        .doc('saved')
+        .collection('items')
+        .doc(id.toString())
+        .delete();
+  }
 
 
 
@@ -192,26 +353,26 @@ class InventoryService {
     required String name,
     required num qty,
     required String unit,
-    DateTime? expiryDate,
     String sourceType = 'Manual',
   }) async {
     final user = _auth.currentUser;
     if (user == null) throw Exception('User not signed in');
 
     final lowerName = name.toLowerCase().trim();
+
+    // 🍽 Get Spoonacular category + aisle
     final catData = await _getCategoryAndAisle(lowerName);
     final aisle = catData['aisle'] ?? 'General';
     final category = catData['category'] ?? 'General';
 
-    // 🧠 Get real shelf life
+    // 🧠 Get estimated shelf life (FoodKeeper)
     final shelfLifeDays = await getShelfLifeDays(lowerName) ?? 7;
 
-    // 🕒 Get consistent base timestamp (server-independent)
+    // 📅 Date added (local)
     final dateAdded = DateTime.now();
 
-    // 🧮 Compute expiry using dateAdded + shelfLifeDays
-    final computedExpiry =
-        expiryDate ?? dateAdded.add(Duration(days: shelfLifeDays));
+    // ⏳ **expiry = dateAdded + shelf-life days**
+    final expiryDate = dateAdded.add(Duration(days: shelfLifeDays));
 
     final ref = _firestore
         .collection('users')
@@ -227,14 +388,15 @@ class InventoryService {
       'aisle': aisle,
       'approxExpiryDays': shelfLifeDays,
       'dateAdded': Timestamp.fromDate(dateAdded),
-      'expiryDate': Timestamp.fromDate(computedExpiry),
+      'expiryDate': Timestamp.fromDate(expiryDate),
       'sourceType': sourceType,
       'timestamp': FieldValue.serverTimestamp(),
     });
 
     debugPrint(
-        '✅ Added $lowerName → $category | +$shelfLifeDays days → ${computedExpiry.toLocal()}');
+        '✅ Added $lowerName → $category | Shelf: $shelfLifeDays days | Expiry: ${expiryDate.toLocal()}');
   }
+
 
 // ----------------------------------------------------------
 // 🔹 Add Multiple Items (Batch Add)
@@ -244,22 +406,28 @@ class InventoryService {
     if (user == null) throw Exception('User not signed in');
 
     final batch = _firestore.batch();
-    final ref =
-    _firestore.collection('users').doc(user.uid).collection('inventory');
+    final ref = _firestore
+        .collection('users')
+        .doc(user.uid)
+        .collection('inventory');
 
     for (final item in items) {
       final name = (item['name'] ?? '').toString().trim().toLowerCase();
       if (name.isEmpty) continue;
 
+      // 🍽 Category + Aisle
       final catData = await _getCategoryAndAisle(name);
       final aisle = catData['aisle'] ?? 'General';
       final category = catData['category'] ?? 'General';
 
+      // 🧠 Shelf life (FoodKeeper)
       final shelfLifeDays = await getShelfLifeDays(name) ?? 7;
 
+      // 📅 Date added
       final dateAdded = DateTime.now();
-      final expiry = item['expiryDate'] ??
-          dateAdded.add(Duration(days: shelfLifeDays));
+
+      // ⏳ **expiry = dateAdded + shelfLifeDays**
+      final expiry = dateAdded.add(Duration(days: shelfLifeDays));
 
       batch.set(ref.doc(), {
         'name': name,
@@ -276,8 +444,78 @@ class InventoryService {
     }
 
     await batch.commit();
-    debugPrint('✅ Batch added ${items.length} items with exact expiry calculation.');
+    debugPrint('✅ Batch added ${items.length} items using auto shelf-life expiry.');
   }
+
+  Future<List<String>> getMissingIngredients(List<String> ingredients) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return [];
+
+    final snap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('inventory')
+        .get();
+
+    final inventoryNames = snap.docs
+        .map((d) => d['name'].toString().toLowerCase())
+        .toList();
+
+    final missing = <String>[];
+
+    for (final ing in ingredients) {
+      if (!inventoryNames.contains(ing.toLowerCase())) {
+        missing.add(ing);
+      }
+    }
+
+    return missing;
+  }
+  Future<Map<String, List<String>>> getIngredientStatus(List<String> ingredients) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return {"have": [], "missing": []};
+
+    final snap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('inventory')
+        .get();
+
+    final inventoryNames = snap.docs
+        .map((d) => d['name'].toString().toLowerCase())
+        .toList();
+
+    final have = <String>[];
+    final missing = <String>[];
+
+    for (final ing in ingredients) {
+      final normalized = ing.toLowerCase().trim();
+
+      if (inventoryNames.contains(normalized)) {
+        have.add(ing);
+      } else {
+        missing.add(ing);
+      }
+    }
+
+    return {"have": have, "missing": missing};
+  }
+
+  Future<void> addToGroceryList(String name) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('groceryList')
+        .add({
+      'name': name,
+      'qty': 1,
+      'addedAt': DateTime.now(),
+    });
+  }
+
 
 
 

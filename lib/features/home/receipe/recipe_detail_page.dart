@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 class RecipeDetailPage extends StatefulWidget {
@@ -19,12 +20,12 @@ class RecipeDetailPage extends StatefulWidget {
 class _RecipeDetailPageState extends State<RecipeDetailPage> {
   bool _isLoading = true;
   Map<String, dynamic>? _recipe;
-  static const String _apiKey = '80c1041e2fb84b6389d2ba69fa7c1f3f';
-
+  late final String _apiKey;
   @override
   void initState() {
     super.initState();
     _fetchRecipeDetails();
+    _apiKey = dotenv.env['SpoonacularapiKey'] ?? '';
   }
 
   Future<void> _fetchRecipeDetails() async {
