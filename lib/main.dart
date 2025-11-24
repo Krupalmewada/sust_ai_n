@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
-import 'features/profile/profile_page.dart'; // NEW
-// import 'features/home/inventory/inventory_tab.dart'; // keep for later if needed
+import 'package:firebase_core/firebase_core.dart';
 
-void main() {
+import 'features/profile/profile_page.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(); // uses google-services.json / GoogleService-Info.plist
   runApp(const MyApp());
 }
 
@@ -18,7 +21,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
         useMaterial3: true,
       ),
-      home: const ProfilePage(), // ← temporary home with summary + button
+      home: const ProfilePage(),
     );
   }
 }
