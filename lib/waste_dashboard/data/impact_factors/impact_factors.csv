@@ -19,3 +19,53 @@ fish.white_fish,6.00,4000,,16.00,OWID/Recon 2023,v1.0
 veg.cucumber,0.50,240,,2.20,OWID/Recon 2023,v1.0
 fruit.orange,0.50,560,,3.50,OWID/Recon 2023,v1.0
 beverage.coffee_ground,5.00,21000,,20.00,WaterFootprint/OWID synth,v1.0
+veg.carrot,0.30,300,,2.20,OWID/Recon 2023,v1.1
+veg.broccoli,0.60,280,,5.50,OWID/Recon 2023,v1.1
+veg.bell_pepper,0.80,220,,6.00,OWID/Recon 2023,v1.1
+veg.cabbage,0.30,200,,1.80,OWID/Recon 2023,v1.1
+veg.lettuce,0.40,250,,3.00,OWID/Recon 2023,v1.1
+veg.mushroom,1.80,300,,8.00,OWID/Recon 2023,v1.1
+veg.garlic,1.20,250,,6.50,OWID/Recon 2023,v1.1
+veg.ginger,1.40,300,,7.00,OWID/Recon 2023,v1.1
+fruit.grapes,1.10,610,,6.50,OWID/Recon 2023,v1.1
+fruit.strawberry,1.50,280,,10.00,OWID/Recon 2023,v1.1
+fruit.blueberry,1.80,300,,12.00,OWID/Recon 2023,v1.1
+fruit.mango,1.10,800,,6.00,OWID/Recon 2023,v1.1
+fruit.pineapple,0.90,500,,4.50,OWID/Recon 2023,v1.1
+fruit.pear,0.40,700,,4.00,OWID/Recon 2023,v1.1
+fruit.watermelon,0.30,250,,1.50,OWID/Recon 2023,v1.1
+fruit.lemon,0.50,400,,4.50,OWID/Recon 2023,v1.1
+fruit.avocado,2.50,2000,,9.50,OWID/Recon 2023,v1.1
+grain.pasta,1.80,1600,,3.00,OWID/Recon 2023,v1.1
+grain.oats,1.00,1200,,3.50,OWID/Recon 2023,v1.1
+grain.quinoa,1.60,1200,,8.50,OWID/Recon 2023,v1.1
+grain.cornmeal,1.20,1000,,2.80,OWID/Recon 2023,v1.1
+grain.tortilla,1.40,1300,,4.00,OWID/Recon 2023,v1.1
+protein.pork,12.00,6000,,13.00,OWID/Recon 2023,v1.1
+protein.turkey,10.00,4300,,11.00,OWID/Recon 2023,v1.1
+protein.tofu,3.00,2400,,6.00,OWID/Recon 2023,v1.1
+protein.tempeh,2.50,2200,,7.00,OWID/Recon 2023,v1.1
+protein.peanut_butter,3.50,2700,,7.50,OWID/Recon 2023,v1.1
+legume.chickpeas,1.00,600,,4.50,OWID/Recon 2023,v1.1
+legume.black_beans,1.10,700,,4.20,OWID/Recon 2023,v1.1
+legume.kidney_beans,1.10,700,,4.20,OWID/Recon 2023,v1.1
+dairy.yogurt,2.20,1100,,4.50,OWID/Recon 2023,v1.1
+dairy.butter,12.00,5500,,18.00,OWID/Recon 2023,v1.1
+dairy.ice_cream,3.50,2000,,7.50,OWID/Recon 2023,v1.1
+bakery.white_bread,0.90,1500,,2.80,OWID/Recon 2023,v1.1
+bakery.whole_wheat_bread,1.00,1600,,3.20,OWID/Recon 2023,v1.1
+snack.chips,3.00,1000,,10.00,Mixed LCA synth,v1.1
+snack.chocolate_bar,19.00,17000,,20.00,OWID chocolate synth,v1.1
+frozen.pizza,4.50,2500,,9.00,Mixed LCA synth,v1.1
+frozen.french_fries,2.00,800,,4.50,Mixed LCA synth,v1.1
+prepared.soup,1.50,900,,5.00,Mixed LCA synth,v1.1
+prepared.ready_meal,4.00,2500,,9.50,Mixed LCA synth,v1.1
+pantry.flour,0.80,1100,,2.20,OWID/Recon 2023,v1.1
+pantry.salt,0.10,50,,1.00,Assumed low impact,v1.1
+pantry.tomato_sauce,1.40,300,,4.00,Derived from veg.tomato,v1.1
+pantry.canned_beans,1.20,800,,3.80,Legume-based synth,v1.1
+beverage.soda,0.70,200,,1.50,OWID/Recon 2023,v1.1
+beverage.juice_orange,0.80,600,,3.00,Derived from fruit.orange,v1.1
+beverage.milk_plant_oat,0.90,300,,3.50,OWID oat milk synth,v1.1
+beverage.beer,1.30,300,,4.00,OWID/Recon 2023,v1.1
+beverage.wine_red,2.50,600,,12.00,OWID/Recon 2023,v1.1
