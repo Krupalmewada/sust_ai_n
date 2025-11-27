@@ -3,9 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:sust_ai_n/features/account/pages/edit_profile.dart';
 import '../../../widgets/bottom_nav_bar.dart';
 import '../../Login/survey_form.dart';
-import '../../../waste_dashboard/presentation/pages/waste_dashboard.dart';
-import '../../../waste_dashboard/presentation/widgets/waste_impact_summary_card.dart';
-
 
 class AccountPage extends StatefulWidget {
   const AccountPage({super.key});
@@ -157,23 +154,6 @@ class _AccountPageState extends State<AccountPage> {
                     onTap: () {},
                   ),
                 ],
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // 🔹 Waste impact summary (Last 7 days)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: WasteImpactSummaryCard(
-                onOpenDetails: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const WasteDashboardPage(),
-                    ),
-                  );
-                },
               ),
             ),
 
