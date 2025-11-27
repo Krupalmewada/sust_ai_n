@@ -55,7 +55,8 @@ class WasteDashboardPage extends StatefulWidget {
 }
 
 class _WasteDashboardPageState extends State<WasteDashboardPage> {
-  String _range = '7d'; // '7d' | '30d' | '90d'
+  // Updated default range: last 1 day (24 hours)
+  String _range = '1d'; // '1d' | '7d' | '30d' | '90d'
 
   @override
   Widget build(BuildContext context) {
@@ -132,17 +133,6 @@ class _WasteDashboardPageState extends State<WasteDashboardPage> {
               final homesLine =
               EquivalencyMapper.kwhToHomesLine(saved.energySavedKwh);
 
-              // tiny demo sparkline (we don't have timeseries yet)
-              final trend = <double>[
-                2.2,
-                3.4,
-                2.9,
-                4.1,
-                3.6,
-                3.9,
-                saved.co2SavedKg.clamp(0, 6)
-              ];
-
               // simple category view
               final catRows = _buildCategoryRows(logs.consumed, factorsByKey);
 
@@ -153,7 +143,7 @@ class _WasteDashboardPageState extends State<WasteDashboardPage> {
               final rangeLabel = _rangeLabel(_range);
 
               final missedSavingsText =
-                  'Cooking the expired items would have saved ~${_fmt(missed.missedSavingsCo2Kg, 'kg CO₂')}.';
+                  'Cooking the expired items would have saved ~${_fmt(missed.missedSavingsCo2Kg, 'kg CO₂')}.'; // ignore: lines_longer_than_80_chars
               final suggestionText = logs.consumed.isEmpty &&
                   logs.expired.isEmpty
                   ? 'Start logging what you use or waste to see smart suggestions here.'
@@ -181,7 +171,6 @@ class _WasteDashboardPageState extends State<WasteDashboardPage> {
                             drivingLine: drivingLine,
                             showersLine: showersLine,
                             homesLine: homesLine,
-                            trend: trend,
                             onCo2Info: () => _showCo2InfoSheet(
                               context: context,
                               saved: saved,
@@ -206,14 +195,6 @@ class _WasteDashboardPageState extends State<WasteDashboardPage> {
                               saved: saved,
                               rangeLabel: rangeLabel,
                             ),
-                          ),
-
-                          const SizedBox(height: 16),
-
-                          // ===== QUICK ACTIONS =====
-                          _QuickActionsRow(
-                            onScan: () {},
-                            onAdd: () {},
                           ),
 
                           const SizedBox(height: 20),
@@ -267,15 +248,6 @@ class _WasteDashboardPageState extends State<WasteDashboardPage> {
                             body: "• $drivingLine\n• $showersLine\n• $homesLine",
                           ),
 
-                          const SizedBox(height: 20),
-
-                          // ===== SMART GROCERY LIST CTA =====
-                          _GroceryListCtaCard(
-                            onTap: () {
-                              // hook up to grocery-list flow
-                            },
-                          ),
-
                           const SizedBox(height: 32),
                         ],
                       ),
@@ -298,7 +270,11 @@ class _WasteDashboardPageState extends State<WasteDashboardPage> {
   }) async {
     final firestore = FirebaseFirestore.instance;
     final now = DateTime.now();
+
+    // Updated to support 1d, 7d, 30d, 90d
     final days = switch (range) {
+      '1d' => 1,
+      '7d' => 7,
       '30d' => 30,
       '90d' => 90,
       _ => 7,
@@ -927,7 +903,7 @@ class _WasteDashboardPageState extends State<WasteDashboardPage> {
 
   static String _fmt(num v, String unit) => '${_roundSmart(v)} $unit';
 
-  static String _money(num v) => '₹${_roundSmart(v)}';
+  static String _money(num v) => '\$${v.toStringAsFixed(2)} CAD';
 
   static double _roundSmart(num value) {
     final v = value.toDouble().abs();
@@ -962,6 +938,10 @@ class _WasteDashboardPageState extends State<WasteDashboardPage> {
 
   static String _rangeLabel(String range) {
     switch (range) {
+      case '1d':
+        return 'Last 24 hours';
+      case '7d':
+        return 'Last 7 days';
       case '30d':
         return 'Last 30 days';
       case '90d':
@@ -1159,7 +1139,8 @@ class _RangeChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = ['7d', '30d', '90d'];
+    // Updated options: 1d, 7d, 30d, 90d
+    final items = ['1d', '7d', '30d', '90d'];
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
@@ -1227,7 +1208,6 @@ class _SummaryImpactCard extends StatelessWidget {
   final String drivingLine;
   final String showersLine;
   final String homesLine;
-  final List<double> trend;
   final VoidCallback onCo2Info;
   final VoidCallback onWaterInfo;
   final VoidCallback onEnergyInfo;
@@ -1238,7 +1218,6 @@ class _SummaryImpactCard extends StatelessWidget {
     required this.drivingLine,
     required this.showersLine,
     required this.homesLine,
-    required this.trend,
     required this.onCo2Info,
     required this.onWaterInfo,
     required this.onEnergyInfo,
@@ -1332,26 +1311,7 @@ class _SummaryImpactCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          const Text(
-            'CO₂ trend',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: _T.ink500,
-            ),
-          ),
-          const SizedBox(height: 4),
-          SizedBox(
-            height: 60,
-            width: double.infinity,
-            child: CustomPaint(
-              painter: _SparklinePainter(
-                data: trend,
-                color: _T.green600,
-              ),
-            ),
-          ),
+          // CO₂ trend sparkline removed on purpose (no real timeseries yet)
         ],
       ),
     );
@@ -1436,56 +1396,6 @@ class _MiniStatTile extends StatelessWidget {
       ),
     );
   }
-}
-
-class _SparklinePainter extends CustomPainter {
-  final List<double> data;
-  final Color color;
-  _SparklinePainter({required this.data, required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (data.isEmpty) return;
-    final maxV =
-    (data.reduce((a, b) => a > b ? a : b)).clamp(1, 9999).toDouble();
-    final minV = data.reduce((a, b) => a < b ? a : b).toDouble();
-
-    final path = Path();
-    for (int i = 0; i < data.length; i++) {
-      final x = (i / (data.length - 1)) * size.width;
-      final y = size.height -
-          ((data[i] - minV) / (maxV - minV + 0.0001)) * size.height;
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
-    }
-
-    final fill = Path.from(path)
-      ..lineTo(size.width, size.height)
-      ..lineTo(0, size.height)
-      ..close();
-    final fillPaint = Paint()
-      ..shader = LinearGradient(
-        colors: [_alpha(color, 0.22), _alpha(color, 0.02)],
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
-    canvas.drawPath(fill, fillPaint);
-
-    final stroke = Paint()
-      ..color = color
-      ..strokeWidth = 2.5
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    canvas.drawPath(path, stroke);
-    }
-
-  @override
-  bool shouldRepaint(covariant _SparklinePainter oldDelegate) =>
-      oldDelegate.data != data || oldDelegate.color != color;
 }
 
 /// ===============================
@@ -1764,62 +1674,6 @@ class _InfoCard extends StatelessWidget {
 }
 
 /// ===============================
-///  QUICK ACTIONS ROW
-/// ===============================
-class _QuickActionsRow extends StatelessWidget {
-  final VoidCallback onScan;
-  final VoidCallback onAdd;
-
-  const _QuickActionsRow({
-    required this.onScan,
-    required this.onAdd,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: onScan,
-            style: OutlinedButton.styleFrom(
-              side: BorderSide(color: _alpha(_T.ink400, 0.5)),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(999),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 10),
-            ),
-            icon: const Icon(Icons.document_scanner, size: 18),
-            label: const Text(
-              'Scan item',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: onAdd,
-            style: OutlinedButton.styleFrom(
-              side: BorderSide(color: _alpha(_T.ink400, 0.5)),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(999),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 10),
-            ),
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text(
-              'Add log',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// ===============================
 ///  INSIGHTS ROW (HORIZONTAL CARDS)
 /// ===============================
 class _InsightsRow extends StatelessWidget {
@@ -1852,71 +1706,6 @@ class _InsightsRow extends StatelessWidget {
               icon: Icons.tips_and_updates,
               title: "Suggestion",
               body: suggestionText,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// ===============================
-///  GROCERY LIST CTA CARD
-/// ===============================
-class _GroceryListCtaCard extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _GroceryListCtaCard({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: _T.white,
-        borderRadius: BorderRadius.circular(_T.rLg),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 12,
-            offset: Offset(0, 4),
-          )
-        ],
-      ),
-      padding: const EdgeInsets.all(_T.pad),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Smart grocery list',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: _T.ink900,
-            ),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Get a grocery list based on what you actually use and waste.',
-            style: TextStyle(fontSize: 13, color: _T.ink700),
-          ),
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: onTap,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _T.green600,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-              icon: const Icon(Icons.restaurant_menu),
-              label: const Text(
-                'Generate my grocery list',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
             ),
           ),
         ],
