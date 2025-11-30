@@ -24,9 +24,11 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
   @override
   void initState() {
     super.initState();
-    _fetchRecipeDetails();
     _apiKey = dotenv.env['SpoonacularapiKey'] ?? '';
+
+    _fetchRecipeDetails(); // ❗ Now safe
   }
+
 
   Future<void> _fetchRecipeDetails() async {
     try {

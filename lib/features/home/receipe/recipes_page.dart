@@ -68,7 +68,7 @@ class RecipesPageState extends State<RecipesPage> with RouteAware {
 
     try {
       final ingredientString = ingredients.join(',');
-      const desiredCount = 10;
+      const desiredCount = 15;
 
       final findRes = await http.get(
         Uri.https(
@@ -95,6 +95,7 @@ class RecipesPageState extends State<RecipesPage> with RouteAware {
           {
             'ids': ids.join(','),
             'includeNutrition': 'true',
+            'includeIngredients': 'true',
             'apiKey': _apiKey,
           },
         ),

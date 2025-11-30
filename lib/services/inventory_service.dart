@@ -5,6 +5,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 
+import '../utils/ingredient_utils.dart';
+
 /// InventoryService — combines Spoonacular metadata + USDA FoodKeeper shelf-life estimation.
 class InventoryService {
   late final String _spoonacularKey;
@@ -177,6 +179,98 @@ class InventoryService {
     }
   }
 
+  // ================================================================
+// REMOVE ONLY ONE ITEM + LOG IT AS CONSUMED
+// ================================================================
+  Future<void> removeIngredientsFromInventory(List<String> recipeIngredients) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final ref = FirebaseFirestore.instance
+        .collection("users")
+        .doc(user.uid)
+        .collection("inventory");
+
+    final snapshot = await ref.get();
+
+    for (final recipeItem in recipeIngredients) {
+      final recipeName = recipeItem.toLowerCase();
+
+      // Find matches
+      final matches = snapshot.docs.where((d) {
+        final invName = d['name'].toString().toLowerCase();
+        return recipeName.contains(invName) || invName.contains(recipeName);
+      }).toList();
+
+      if (matches.isEmpty) continue;
+
+      // Sort by expiry
+      matches.sort((a, b) {
+        final da = (a['expiryDate'] as Timestamp).toDate();
+        final db = (b['expiryDate'] as Timestamp).toDate();
+        return da.compareTo(db);
+      });
+
+      final doc = matches.first; // earliest-expiring
+      final data = doc.data();
+
+      final name = data['name'];
+      final qty = data['qty'] ?? 1;
+      final unit = data['unit'] ?? 'pcs';
+      final category = data['category'] ?? 'other';
+
+      // 1️⃣ LOG AS CONSUMED
+      await logItemConsumed(
+        name: name,
+        category: category,
+        qty: qty,
+        unit: unit,
+      );
+
+      // 2️⃣ DELETE FROM INVENTORY
+      print("🗑 Removing INVENTORY → $name (logged as consumed)");
+      await doc.reference.delete();
+    }
+  }
+// =============================================================
+// REMOVE ONE SPECIFIC INVENTORY ITEM BY DOC ID (manual delete)
+// =============================================================
+  Future<void> removeSingleItemById(String docId) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final ref = FirebaseFirestore.instance
+        .collection("users")
+        .doc(user.uid)
+        .collection("inventory")
+        .doc(docId);
+
+    final snap = await ref.get();
+    if (!snap.exists) return;
+
+    final data = snap.data()!;
+    final name = data['name'];
+    final qty = data['qty'] ?? 1;
+    final unit = data['unit'] ?? 'pcs';
+    final category = data['category'] ?? 'other';
+
+    // log to waste dashboard
+    await logItemConsumed(
+      name: name,
+      category: category,
+      qty: qty,
+      unit: unit,
+    );
+
+    // delete actual item
+    await ref.delete();
+
+    print("🗑 Manually removed $name (ID: $docId)");
+  }
+
+
+
+
 
   Future<void> saveRecipe(Map<String, dynamic> recipe) async {
     final user = _auth.currentUser;
@@ -299,6 +393,16 @@ class InventoryService {
         .doc(id.toString())
         .delete();
   }
+  String normalizeName(String name) {
+    return coreIngredient(
+        name
+            .trim()
+            .toLowerCase()
+            .replaceAll(RegExp(r'[^a-z ]'), '') // remove punctuation
+            .replaceAll(RegExp(r'\s+'), ' ')   // remove double spaces
+    );
+  }
+
 
 
 
@@ -401,36 +505,41 @@ class InventoryService {
 // ----------------------------------------------------------
 // 🔹 Add Multiple Items (Batch Add)
 // ----------------------------------------------------------
+  // ----------------------------------------------------------
+// 🔹 Add Multiple Items (SAFE VERSION - waits for each API)
+// ----------------------------------------------------------
   Future<void> addItems(List<Map<String, dynamic>> items) async {
     final user = _auth.currentUser;
     if (user == null) throw Exception('User not signed in');
 
-    final batch = _firestore.batch();
     final ref = _firestore
         .collection('users')
         .doc(user.uid)
         .collection('inventory');
 
-    for (final item in items) {
-      final name = (item['name'] ?? '').toString().trim().toLowerCase();
-      if (name.isEmpty) continue;
+    debugPrint("🟦 Adding ${items.length} scanned items (with API validation)...");
 
-      // 🍽 Category + Aisle
-      final catData = await _getCategoryAndAisle(name);
+    for (final item in items) {
+      final rawName = (item['name'] ?? '').toString().trim().toLowerCase();
+      if (rawName.isEmpty) continue;
+
+      debugPrint("🔍 Processing → $rawName");
+
+      // 1️⃣ CATEGORY + AISLE LOOKUP (WAIT)
+      final catData = await _getCategoryAndAisle(rawName);
       final aisle = catData['aisle'] ?? 'General';
       final category = catData['category'] ?? 'General';
 
-      // 🧠 Shelf life (FoodKeeper)
-      final shelfLifeDays = await getShelfLifeDays(name) ?? 7;
+      debugPrint("📌 Category = $category | Aisle = $aisle");
 
-      // 📅 Date added
+      // 2️⃣ Shelf life lookup (WAIT)
+      final shelfLifeDays = await getShelfLifeDays(rawName) ?? 7;
       final dateAdded = DateTime.now();
-
-      // ⏳ **expiry = dateAdded + shelfLifeDays**
       final expiry = dateAdded.add(Duration(days: shelfLifeDays));
 
-      batch.set(ref.doc(), {
-        'name': name,
+      // 3️⃣ WRITE to Firestore sequentially
+      await ref.add({
+        'name': rawName,
         'qty': item['qty'] ?? 1,
         'unit': item['unit'] ?? 'pcs',
         'category': category,
@@ -441,10 +550,11 @@ class InventoryService {
         'sourceType': item['sourceType'] ?? 'Scan',
         'timestamp': FieldValue.serverTimestamp(),
       });
+
+      debugPrint("✅ Added → $rawName | Exp: $expiry");
     }
 
-    await batch.commit();
-    debugPrint('✅ Batch added ${items.length} items using auto shelf-life expiry.');
+    debugPrint("🎉 DONE: Added ${items.length} scanned items safely.");
   }
 
   Future<List<String>> getMissingIngredients(List<String> ingredients) async {
@@ -481,17 +591,17 @@ class InventoryService {
         .collection('inventory')
         .get();
 
-    final inventoryNames = snap.docs
-        .map((d) => d['name'].toString().toLowerCase())
+    final inventoryCoreNames = snap.docs
+        .map((d) => coreIngredient(d['name'].toString()))
         .toList();
 
     final have = <String>[];
     final missing = <String>[];
 
     for (final ing in ingredients) {
-      final normalized = ing.toLowerCase().trim();
+      final core = coreIngredient(ing);
 
-      if (inventoryNames.contains(normalized)) {
+      if (inventoryCoreNames.contains(core)) {
         have.add(ing);
       } else {
         missing.add(ing);
@@ -500,6 +610,7 @@ class InventoryService {
 
     return {"have": have, "missing": missing};
   }
+
 
   Future<void> addToGroceryList(String name) async {
     final user = FirebaseAuth.instance.currentUser;
@@ -516,6 +627,59 @@ class InventoryService {
     });
   }
 
+  // ================================================================
+// 📌 LOG AN ITEM AS CONSUMED (for Waste Dashboard)
+// ================================================================
+  Future<void> logItemConsumed({
+    required String name,
+    required String category,
+    required num qty,
+    required String unit,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final userDoc = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid);
+
+    // 1️⃣ Convert qty + unit → kg
+    final double kg = _convertToKg(qty, unit);
+
+    // 2️⃣ Canonical keys
+    final leaf = _norm(name);
+    final cat = _norm(category);
+    final key = "$cat.$leaf";
+
+    // 3️⃣ Add to Firestore consumption_logs
+    await userDoc.collection('consumption_logs').add({
+      'name': name,
+      'key': key,
+      'leafKey': leaf,
+      'category': category,
+      'kg': kg,
+      'at': Timestamp.now(),
+    });
+
+    print("📗 Logged consumed → $name  |  $kg kg");
+  }
+
+// simple helpers:
+  String _norm(String v) =>
+      v.toLowerCase().trim().replaceAll(RegExp(r'\s+'), '_');
+
+// convert qty to kg (common-use logic)
+  double _convertToKg(num qty, String unit) {
+    unit = unit.toLowerCase().trim();
+
+    if (unit == "kg") return qty.toDouble();
+    if (unit == "g" || unit == "gram" || unit == "grams") return qty / 1000;
+    if (unit == "lb" || unit == "lbs") return qty * 0.453592;
+    if (unit == "oz" || unit == "ounce" || unit == "ounces") return qty * 0.0283495;
+
+    // default fallback: assume 1 item ≈ 0.15kg
+    return (qty * 0.15).toDouble();
+  }
 
 
 
@@ -525,55 +689,89 @@ class InventoryService {
   // ----------------------------------------------------------
   Future<Map<String, String>> _getCategoryAndAisle(String name) async {
     final lower = name.toLowerCase().trim();
-    if (_categoryCache.containsKey(lower)) return _categoryCache[lower]!;
 
-    try {
-      final searchUri = Uri.https(
-        'api.spoonacular.com',
-        '/food/ingredients/search',
-        {'query': lower, 'number': '1', 'apiKey': _spoonacularKey},
-      );
-      final searchRes = await http.get(searchUri);
-      if (searchRes.statusCode != 200) {
-        return {'category': 'General', 'aisle': 'General'};
-      }
-
-      final searchData = json.decode(searchRes.body);
-      if (searchData['results'] == null || searchData['results'].isEmpty) {
-        return {'category': 'General', 'aisle': 'General'};
-      }
-
-      final id = searchData['results'][0]['id'].toString();
-      final infoUri = Uri.https(
-        'api.spoonacular.com',
-        '/food/ingredients/$id/information',
-        {'amount': '1', 'apiKey': _spoonacularKey},
-      );
-      final infoRes = await http.get(infoUri);
-      if (infoRes.statusCode != 200) {
-        return {'category': 'General', 'aisle': 'General'};
-      }
-
-      final infoData = json.decode(infoRes.body);
-      final rawAisle = (infoData['aisle'] ?? '').toString().trim();
-      final aisle =
-      rawAisle.isNotEmpty ? _capitalize(rawAisle.split('/').last) : 'General';
-
-      String category = 'General';
-      if (infoData['categoryPath'] != null &&
-          infoData['categoryPath'] is List &&
-          (infoData['categoryPath'] as List).isNotEmpty) {
-        category =
-            _capitalize((infoData['categoryPath'] as List).last.toString());
-      }
-
-      final result = {'category': category, 'aisle': aisle};
-      _categoryCache[lower] = result;
-      return result;
-    } catch (e) {
-      debugPrint('❌ Spoonacular lookup failed for "$name": $e');
-      return {'category': 'General', 'aisle': 'General'};
+    // 🔹 Cached result? → Return instantly
+    if (_categoryCache.containsKey(lower)) {
+      return _categoryCache[lower]!;
     }
+
+    // 🔹 Retry up to 3 times
+    for (int attempt = 1; attempt <= 3; attempt++) {
+      try {
+        final searchUri = Uri.https(
+          'api.spoonacular.com',
+          '/food/ingredients/search',
+          {
+            'query': lower,
+            'number': '1',
+            'apiKey': _spoonacularKey,
+          },
+        );
+
+        final searchRes = await http.get(searchUri);
+
+        // ⭐ Check for rate limit issues
+        if (searchRes.statusCode == 402 || searchRes.statusCode == 429) {
+          print("⏳ Spoonacular RATE-LIMIT (attempt $attempt). Retrying…");
+          await Future.delayed(const Duration(milliseconds: 500));
+          continue;
+        }
+
+        if (searchRes.statusCode != 200) break;
+
+        final searchData = json.decode(searchRes.body);
+
+        if (searchData['results'] == null || searchData['results'].isEmpty) break;
+
+        final id = searchData['results'][0]['id'].toString();
+
+        // ============================
+        // Fetch ingredient information
+        // ============================
+        final infoUri = Uri.https(
+          'api.spoonacular.com',
+          '/food/ingredients/$id/information',
+          {'amount': '1', 'apiKey': _spoonacularKey},
+        );
+
+        final infoRes = await http.get(infoUri);
+
+        if (infoRes.statusCode == 402 || infoRes.statusCode == 429) {
+          print("⏳ RATE-LIMIT for info (attempt $attempt). Retrying...");
+          await Future.delayed(const Duration(milliseconds: 600));
+          continue;
+        }
+
+        if (infoRes.statusCode != 200) break;
+
+        final infoData = json.decode(infoRes.body);
+
+        // Extract aisle/category properly
+        final aisle = (infoData['aisle'] ?? 'General');
+        String category = 'General';
+
+        if (infoData['categoryPath'] != null &&
+            infoData['categoryPath'] is List &&
+            (infoData['categoryPath'] as List).isNotEmpty) {
+          category = (infoData['categoryPath'] as List).last.toString();
+        }
+
+        final result = {
+          'aisle': aisle.toString(),
+          'category': category.toString(),
+        };
+
+        _categoryCache[lower] = result; // ⭐ cache it
+        return result;
+      } catch (e) {
+        print("❌ Spoonacular lookup failed (attempt $attempt): $e");
+        await Future.delayed(const Duration(milliseconds: 400));
+      }
+    }
+
+    // Default fallback (only reached if ALL retries fail)
+    print("⚠️ Falling back to general category for '$name'");
+    return {'aisle': 'General', 'category': 'General'};
   }
 
   String _capitalize(String v) => v.isEmpty

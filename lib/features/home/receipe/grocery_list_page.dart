@@ -166,22 +166,20 @@ class _ExpandableCategoryState extends State<_ExpandableCategory> {
             widget.category,
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
           ),
-          children: widget.items.map((item) {
+          children: widget.items.isEmpty
+              ? []
+              : widget.items.map((item) {
             return Padding(
-              padding:
-              const EdgeInsets.only(left: 8.0, right: 8.0, bottom: 6),
+              padding: const EdgeInsets.only(left: 8.0, right: 8.0, bottom: 6),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // LEFT SIDE (icon + name with overflow fix)
                   Expanded(
                     child: Row(
                       children: [
                         Icon(Icons.radio_button_off,
                             size: 18, color: Colors.grey.shade700),
                         const SizedBox(width: 10),
-
-                        // ✔ Prevent overflow
                         Flexible(
                           child: Text(
                             item['name'] ?? '',
@@ -193,8 +191,6 @@ class _ExpandableCategoryState extends State<_ExpandableCategory> {
                       ],
                     ),
                   ),
-
-                  // RIGHT SIDE (qty + delete)
                   Row(
                     children: [
                       Text(
@@ -215,6 +211,7 @@ class _ExpandableCategoryState extends State<_ExpandableCategory> {
               ),
             );
           }).toList(),
+
         ),
       ),
     );

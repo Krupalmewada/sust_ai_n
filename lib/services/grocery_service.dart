@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
+
+import '../utils/ingredient_utils.dart';
 
 class GroceryService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -14,25 +16,66 @@ class GroceryService {
     _spoonacularKey = dotenv.env['SpoonacularapiKey'] ?? '';
   }
 
+  // ---------------------------------------------------------------------------
+  // REMOVE from grocery list → fuzzy delete (potatoes, potato, peeled potato…)
+  // ---------------------------------------------------------------------------
+  // ================================================================
+// REMOVE INGREDIENTS FROM GROCERY LIST (simple substring match)
+// ================================================================
+  Future<void> removeIngredientsFromGrocery(List<String> recipeIngredients) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
 
-  // ---------------------------------------------------------------
-  // CATEGORY LOGIC (Same as Inventory)
-  // ---------------------------------------------------------------
+    final ref = _firestore
+        .collection("users")
+        .doc(user.uid)
+        .collection("groceryList");
+
+    final snapshot = await ref.get();
+
+    print("\n======== GROCERY DELETE SIMPLE MATCH ========");
+
+    for (final doc in snapshot.docs) {
+      final groceryName = (doc['name'] ?? '').toString().toLowerCase().trim();
+
+      for (final recipeItem in recipeIngredients) {
+        final recipeName = recipeItem.toLowerCase();
+
+        // SIMPLE MATCH RULE:
+        // recipeIngredient contains groceryName → delete
+        // OR groceryName contains recipeIngredient → delete
+        if (recipeName.contains(groceryName) || groceryName.contains(recipeName)) {
+          print("🗑 Removing GROCERY item: '$groceryName' (matched with '$recipeName')");
+          await doc.reference.delete();
+          break; // move to next grocery item
+        }
+      }
+    }
+
+    print("======== DONE GROCERY DELETE ========\n");
+  }
+
+  // ---------------------------------------------------------------------------
+  // CATEGORY LOOKUP USING Spoonacular
+  // ---------------------------------------------------------------------------
   Future<String> determineCategory(String name) async {
     try {
       final searchUri = Uri.https(
         'api.spoonacular.com',
         '/food/ingredients/search',
-        {'query': name, 'number': '1', 'apiKey': _spoonacularKey},
+        {
+          'query': name,
+          'number': '1',
+          'apiKey': _spoonacularKey,
+        },
       );
 
       final searchRes = await http.get(searchUri);
       if (searchRes.statusCode != 200) return "Other";
 
       final searchData = json.decode(searchRes.body);
-      if (searchData['results'] == null || searchData['results'].isEmpty) {
-        return "Other";
-      }
+      if (searchData['results'] == null ||
+          searchData['results'].isEmpty) return "Other";
 
       final id = searchData['results'][0]['id'].toString();
 
@@ -69,52 +112,47 @@ class GroceryService {
     return v[0].toUpperCase() + v.substring(1);
   }
 
-  // ---------------------------------------------------------------
-  // ADD grocery item with auto–category
-  // ---------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // ADD grocery item with automatic category
+  // ---------------------------------------------------------------------------
   Future<void> addCategorizedItem(String name, String qty) async {
     final user = _auth.currentUser;
     if (user == null) throw Exception("User not signed in");
 
-    final cleanName = name.trim().toLowerCase();
+    final cleanLower = name.trim().toLowerCase();
 
-    // 🔍 Check if item already exists
-    final existing = await _firestore
+    // Prevent duplicates
+    final check = await _firestore
         .collection('users')
         .doc(user.uid)
         .collection('groceryList')
-        .where('nameLower', isEqualTo: cleanName)
+        .where('nameLower', isEqualTo: cleanLower)
         .limit(1)
         .get();
 
-    // ❗ If exists → silently do nothing
-    if (existing.docs.isNotEmpty) return;
+    if (check.docs.isNotEmpty) return;
 
-    // 🟢 Determine category using Spoonacular
     final category = await determineCategory(name);
 
-    // 🟢 Add new item
     await _firestore
         .collection('users')
         .doc(user.uid)
         .collection('groceryList')
         .add({
       'name': name,
-      'nameLower': cleanName, // used for duplicate check
+      'nameLower': cleanLower,
       'qty': qty,
       'category': category,
       'timestamp': FieldValue.serverTimestamp(),
     });
   }
 
-
-
-  // ---------------------------------------------------------------
-  // DELETE grocery item
-  // ---------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // DELETE a single item manually
+  // ---------------------------------------------------------------------------
   Future<void> deleteItem(String docId) async {
     final user = _auth.currentUser;
-    if (user == null) throw Exception("User not signed in");
+    if (user == null) return;
 
     await _firestore
         .collection('users')
@@ -123,10 +161,19 @@ class GroceryService {
         .doc(docId)
         .delete();
   }
+  String normalizeName(String name) {
+    return coreIngredient(
+        name
+            .trim()
+            .toLowerCase()
+            .replaceAll(RegExp(r'[^a-z ]'), '') // remove punctuation
+            .replaceAll(RegExp(r'\s+'), ' ')   // remove double spaces
+    );
+  }
 
-  // ---------------------------------------------------------------
-  // STREAM grouped grocery items by category
-  // ---------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // STREAM grocery items by category → ALWAYS includes doc.id
+  // ---------------------------------------------------------------------------
   Stream<Map<String, List<Map<String, dynamic>>>> streamGroceryItems() {
     final user = _auth.currentUser;
     if (user == null) throw Exception("User not signed in");
@@ -142,12 +189,14 @@ class GroceryService {
 
       for (var doc in snapshot.docs) {
         final data = doc.data();
-        final category = (data['category'] ?? 'Other') as String;
+
+        final category = (data['category'] ?? 'Other').toString();
 
         grouped.putIfAbsent(category, () => []);
         grouped[category]!.add({
           'id': doc.id,
           'name': data['name'],
+          'nameLower': data['nameLower'],
           'qty': data['qty'],
         });
       }

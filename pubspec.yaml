@@ -97,6 +97,7 @@ flutter:
   assets:
     - assets/images/diet.png
     - assets/keys.env
+    - lib/waste_dashboard/data/impact_factors/impact_factors.csv
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
