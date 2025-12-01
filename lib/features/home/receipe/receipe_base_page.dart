@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:sust_ai_n/features/home/receipe/favorites_page.dart';
 import 'package:sust_ai_n/features/home/receipe/saved_page.dart';
 
+import '../../../services/notification_service.dart';
 import '../../../widgets/bottom_nav_bar.dart';
 import '../../../widgets/inventory_tab_selector.dart';
 import 'grocery_list_page.dart';
@@ -28,6 +29,7 @@ class _ReceipeBasePageState extends State<ReceipeBasePage> {
     super.initState();
     _searchController.addListener(() => setState(() {}));
     _listenToInventoryChanges();
+
   }
 
   /// 🔹 Real-time listener for Firestore inventory

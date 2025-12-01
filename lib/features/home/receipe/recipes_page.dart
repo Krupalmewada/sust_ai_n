@@ -2,6 +2,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+import '../../../services/notification_manager.dart';
 import '../../../widgets/recipe_card.dart';
 import '../../../services/inventory_service.dart';
 import 'package:sust_ai_n/main.dart';
@@ -21,10 +25,18 @@ class RecipesPageState extends State<RecipesPage> with RouteAware {
 
   final String _apiKey = dotenv.env['SpoonacularapiKey'] ?? '';
 
+  /// ⭐ Stores survey data: diet + intolerance + cuisine
+  Map<String, dynamic>? _userPreferences;
+
   @override
   void initState() {
     super.initState();
-    _fetchRecipes(widget.inventoryItems);
+
+    _loadUserPreferences().then((_) {
+      _fetchRecipes(widget.inventoryItems);
+    });
+
+    NotificationManager().checkExpiringItems();
   }
 
   @override
@@ -45,6 +57,26 @@ class RecipesPageState extends State<RecipesPage> with RouteAware {
     _fetchRecipes(updatedItems);
   }
 
+  // ============================================================
+  // 🔥 Load Survey Preferences
+  // ============================================================
+  Future<void> _loadUserPreferences() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final doc = await FirebaseFirestore.instance
+        .collection("users")
+        .doc(user.uid)
+        .get();
+
+    final survey = doc.data()?["profile"]?["survey"];
+    if (survey != null) {
+      setState(() => _userPreferences = survey);
+    }
+
+    print("🔥 Loaded survey prefs → $_userPreferences");
+  }
+
   void searchRecipes(String query) {
     if (query.isEmpty) {
       _fetchRecipes(widget.inventoryItems);
@@ -62,80 +94,107 @@ class RecipesPageState extends State<RecipesPage> with RouteAware {
     _fetchRecipes(updatedItems);
   }
 
+  // ============================================================
+  // 🔥 Fetch Recipes with Diet / Intolerance / Cuisine Filters
+  // ============================================================
   Future<void> _fetchRecipes(List<String> ingredients) async {
     if (ingredients.isEmpty) return;
     setState(() => _isLoading = true);
 
     try {
-      final ingredientString = ingredients.join(',');
-      const desiredCount = 15;
+      // -----------------------------
+      // Read user preferences
+      // -----------------------------
+      final dietaryRaw = List<String>.from(_userPreferences?['dietaryRestrictions'] ?? []);
+      final intoleranceRaw = List<String>.from(_userPreferences?['intolerances'] ?? []);
+      final cuisinesRaw = List<String>.from(_userPreferences?['preferredCuisines'] ?? []);
 
-      final findRes = await http.get(
-        Uri.https(
-          'api.spoonacular.com',
-          '/recipes/findByIngredients',
-          {
-            'ingredients': ingredientString,
-            'number': '${desiredCount * 2}',
-            'ranking': '2',
-            'apiKey': _apiKey,
-          },
-        ),
+      // Remove “None”
+      final dietary = dietaryRaw.contains("None") ? [] : dietaryRaw.map(_normalize).toList();
+      final intolerances = intoleranceRaw.contains("None") ? [] : intoleranceRaw.map(_normalize).toList();
+      final cuisines = cuisinesRaw.contains("None") ? [] : cuisinesRaw;
+
+      print("⭐ Filters applied →");
+      print("   Diet = $dietary");
+      print("   Intolerances = $intolerances");
+      print("   Cuisines = $cuisines");
+
+      // -----------------------------
+      // Spoonacular Query Params
+      // -----------------------------
+      final params = {
+        'apiKey': _apiKey,
+        'number': '15',                     // directly get 15
+        'addRecipeNutrition': 'true',
+        'addRecipeInformation': 'true',
+        if (dietary.isNotEmpty) 'diet': dietary.join(','),
+        if (intolerances.isNotEmpty) 'intolerances': intolerances.join(','),
+        if (cuisines.isNotEmpty) 'cuisine': cuisines.join(','),
+      };
+
+      print("🔗 ComplexSearch Params: $params");
+
+      // -----------------------------
+      // API CALL
+      // -----------------------------
+      final searchRes = await http.get(
+        Uri.https("api.spoonacular.com", "/recipes/complexSearch", params),
       );
 
-      if (findRes.statusCode != 200) return;
+      if (searchRes.statusCode != 200) {
+        print("❌ ComplexSearch failed → ${searchRes.statusCode}");
+        return;
+      }
 
-      final List findData = json.decode(findRes.body);
+      final jsonBody = json.decode(searchRes.body);
+      final List results = jsonBody["results"] ?? [];
 
-      final ids = findData.map((r) => r['id'].toString()).toList();
-      final bulk = await http.get(
-        Uri.https(
-          'api.spoonacular.com',
-          '/recipes/informationBulk',
-          {
-            'ids': ids.join(','),
-            'includeNutrition': 'true',
-            'includeIngredients': 'true',
-            'apiKey': _apiKey,
-          },
-        ),
-      );
+      print("🍽 Found ${results.length} filtered recipes");
 
-      if (bulk.statusCode != 200) return;
-      final List infoData = json.decode(bulk.body);
+      // -----------------------------
+      // Build final list (NO INVENTORY MATCHING)
+      // -----------------------------
+      final List<Map<String, dynamic>> finalRecipes = [];
 
-      final List<Map<String, dynamic>> filtered = [];
-
-      for (final recipe in infoData) {
-        if (filtered.length >= desiredCount) break;
-
-        final url = recipe['image'] ?? '';
-        if (!url.startsWith("http")) continue;
-
-        final nutrients = recipe['nutrition']?['nutrients'] ?? [];
-        final calRow = nutrients.firstWhere(
-              (e) => e['name'] == 'Calories',
+      for (final r in results) {
+        final nutrition = r["nutrition"];
+        final calories = nutrition?["nutrients"]?.firstWhere(
+              (n) => n["name"] == "Calories",
           orElse: () => null,
-        );
+        )?["amount"];
 
-        filtered.add({
-          'id': recipe['id'],
-          'title': recipe['title'],
-          'image': url,
-          'servings': recipe['servings'],
-          'calories': calRow != null ? calRow['amount'] : null,
-          'extendedIngredients': recipe['extendedIngredients'] ?? [],
+        final ingredientsList = (nutrition?["ingredients"] ?? [])
+            .map((e) => (e["name"] ?? "").toString())
+            .toList();
+
+        finalRecipes.add({
+          "id": r["id"],
+          "title": r["title"],
+          "image": r["image"],
+          "servings": r["servings"],
+          "calories": calories,
+          "extendedIngredients": ingredientsList,
         });
       }
 
       if (!mounted) return;
-      setState(() => _recipes = filtered);
+      setState(() => _recipes = finalRecipes);
 
+    } catch (e) {
+      print("❌ ERROR in _fetchRecipes → $e");
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
+
+  // Utility: Normalize filter words
+  String _normalize(String v) =>
+      v.toLowerCase().replaceAll(" ", "").trim();
+
+  // ============================================================
+  // UI
+  // ============================================================
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -151,19 +210,11 @@ class RecipesPageState extends State<RecipesPage> with RouteAware {
       itemCount: _recipes.length,
       itemBuilder: (context, index) {
         final recipe = _recipes[index];
-
         return RecipeCard(
           key: ValueKey(recipe['id']),
           recipe: recipe,
-
-          // NEW CALLBACKS — REQUIRED
-          onLikeChanged: (liked) {
-            // do nothing, only FavoritesPage cares
-          },
-
-          onSaveChanged: (saved) {
-            // do nothing, only SavedPage cares
-          },
+          onLikeChanged: (liked) {},
+          onSaveChanged: (saved) {},
         );
       },
     );

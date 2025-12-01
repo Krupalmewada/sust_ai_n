@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:sust_ai_n/features/account/pages/account_page.dart';
-import 'package:sust_ai_n/features/home/inventory/inventory_tab.dart';
 
 User? user = FirebaseAuth.instance.currentUser;
 
@@ -19,20 +17,37 @@ class _SurveyForm extends State<SurveyForm> {
   final _familyCountController = TextEditingController();
   final _spendingController = TextEditingController();
 
-  final FocusNode _adultFocus = FocusNode();
-  final FocusNode _kidsFocus = FocusNode();
-  final FocusNode _familyFocus = FocusNode();
-  final FocusNode _spendingFocus = FocusNode();
-
   String? _shoppingFrequency;
 
+  // 🔹 Official Spoonacular diet list
   final List<String> dietaryOptions = [
+    'Gluten Free',
+    'Ketogenic',
     'Vegetarian',
+    'Lacto-Vegetarian',
+    'Ovo-Vegetarian',
     'Vegan',
-    'Gluten-Free',
-    'Keto',
-    'Lactose Intolerant',
-    'Pescatarian',
+    'Pescetarian',
+    'Paleo',
+    'Primal',
+    'Whole30',
+    'None',
+  ];
+
+  // 🔹 Spoonacular intolerances
+  final List<String> intoleranceOptions = [
+    'Dairy',
+    'Egg',
+    'Gluten',
+    'Peanut',
+    'Seafood',
+    'Sesame',
+    'Shellfish',
+    'Soy',
+    'Sulfite',
+    'Tree Nut',
+    'Wheat',
+    'None',
   ];
 
   final List<String> cuisineOptions = [
@@ -42,104 +57,42 @@ class _SurveyForm extends State<SurveyForm> {
     'Mexican',
     'Fast Food',
     'Japanese',
+    'None',
   ];
 
   List<String> selectedDietary = [];
+  List<String> selectedIntolerances = [];
   List<String> selectedCuisines = [];
 
-  // Error messages
+  bool _isLoading = true;
+  bool _isEditMode = false;
+
   String? _adultError;
   String? _kidsError;
   String? _familyError;
   String? _dietError;
   String? _cuisineError;
+  String? _intoleranceError;
   String? _spendingError;
   String? _frequencyError;
-
-  // loader flag
-  bool _isLoading = true;
-
-  // Edit mode flag
-  bool _isEditMode = false;
 
   @override
   void initState() {
     super.initState();
     _loadSurveyData();
-
-    // Validate on focus lost
-    _adultFocus.addListener(() {
-      if (!_adultFocus.hasFocus) {
-        setState(() {
-          _adultError = _adultController.text.trim().isEmpty
-              ? "Please enter number of adults."
-              : null;
-        });
-      }
-    });
-
-    _kidsFocus.addListener(() {
-      if (!_kidsFocus.hasFocus) {
-        setState(() {
-          _kidsError = _kidsController.text.trim().isEmpty
-              ? "Please enter number of kids."
-              : null;
-        });
-      }
-    });
-
-    _familyFocus.addListener(() {
-      if (!_familyFocus.hasFocus) {
-        setState(() {
-          _familyError = _familyCountController.text.trim().isEmpty
-              ? "Please enter family count."
-              : null;
-        });
-      }
-    });
-
-    _spendingFocus.addListener(() {
-      if (!_spendingFocus.hasFocus) {
-        setState(() {
-          _spendingError = _spendingController.text.trim().isEmpty
-              ? "Please enter weekly spending."
-              : null;
-        });
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _adultController.dispose();
-    _kidsController.dispose();
-    _familyCountController.dispose();
-    _spendingController.dispose();
-    _adultFocus.dispose();
-    _kidsFocus.dispose();
-    _familyFocus.dispose();
-    _spendingFocus.dispose();
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    const errorColor = Colors.red;
-
     if (_isLoading) {
       return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(color: Colors.green),
-        ),
+        body: Center(child: CircularProgressIndicator(color: Colors.green)),
       );
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          "Personalization",
-          style: TextStyle(color: Colors.white),
-        ),
+        title: const Text("Personalization", style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.green,
       ),
       body: SafeArea(
@@ -151,63 +104,25 @@ class _SurveyForm extends State<SurveyForm> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+
                     _buildLabel("Household Members"),
                     Row(
                       children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _adultController,
-                            focusNode: _adultFocus,
-                            keyboardType: TextInputType.number,
-                            decoration: _inputDecoration("Adults"),
-                          ),
-                        ),
+                        Expanded(child: _buildTextField(_adultController, "Adults")),
                         const SizedBox(width: 16),
-                        Expanded(
-                          child: TextField(
-                            controller: _kidsController,
-                            focusNode: _kidsFocus,
-                            keyboardType: TextInputType.number,
-                            decoration: _inputDecoration("Kids"),
-                          ),
-                        ),
+                        Expanded(child: _buildTextField(_kidsController, "Kids")),
                       ],
                     ),
-                    if (_adultError != null || _kidsError != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 5),
-                        child: Text(
-                          _adultError ?? _kidsError ?? "",
-                          style: const TextStyle(color: errorColor),
-                        ),
-                      ),
                     const SizedBox(height: 20),
 
-                    _buildLabel("Number of family members"),
-                    TextField(
-                      controller: _familyCountController,
-                      focusNode: _familyFocus,
-                      keyboardType: TextInputType.number,
-                      decoration: _inputDecoration("Enter number"),
-                    ),
-                    if (_familyError != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 5),
-                        child: Text(
-                          _familyError!,
-                          style: const TextStyle(color: errorColor),
-                        ),
-                      ),
+                    _buildLabel("Family Count"),
+                    _buildTextField(_familyCountController, "Enter number"),
                     const SizedBox(height: 20),
 
-                    _buildLabelWithAdd(
-                      "Dietary restrictions",
-                      () => _showAddDialog(
-                        title: "Add Dietary Restriction",
-                        onAdd: (value) =>
-                            setState(() => dietaryOptions.add(value)),
-                      ),
-                    ),
+                    // ======================
+                    // 🍽 SPOONACULAR DIETS
+                    // ======================
+                    _buildLabel("Dietary Restrictions (Spoonacular Approved)"),
                     Wrap(
                       spacing: 8,
                       children: dietaryOptions.map((option) {
@@ -215,8 +130,6 @@ class _SurveyForm extends State<SurveyForm> {
                         return FilterChip(
                           label: Text(option),
                           selected: selected,
-                          backgroundColor: Colors.white,
-                          padding: const EdgeInsets.all(10),
                           selectedColor: Colors.green,
                           checkmarkColor: Colors.white,
                           onSelected: (value) {
@@ -224,9 +137,6 @@ class _SurveyForm extends State<SurveyForm> {
                               value
                                   ? selectedDietary.add(option)
                                   : selectedDietary.remove(option);
-                              _dietError = selectedDietary.isEmpty
-                                  ? "Please select at least one dietary restriction."
-                                  : null;
                             });
                           },
                         );
@@ -235,21 +145,41 @@ class _SurveyForm extends State<SurveyForm> {
                     if (_dietError != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 5),
-                        child: Text(
-                          _dietError!,
-                          style: const TextStyle(color: errorColor),
-                        ),
+                        child: Text(_dietError!, style: const TextStyle(color: Colors.red)),
                       ),
                     const SizedBox(height: 20),
 
-                    _buildLabelWithAdd(
-                      "Preferred cuisines",
-                      () => _showAddDialog(
-                        title: "Add Preferred Cuisine",
-                        onAdd: (value) =>
-                            setState(() => cuisineOptions.add(value)),
-                      ),
+                    // ======================
+                    // ❗ INTOLERANCES
+                    // ======================
+                    _buildLabel("Food Intolerances"),
+                    Wrap(
+                      spacing: 8,
+                      children: intoleranceOptions.map((option) {
+                        final selected = selectedIntolerances.contains(option);
+                        return FilterChip(
+                          label: Text(option),
+                          selected: selected,
+                          selectedColor: Colors.green,
+                          checkmarkColor: Colors.white,
+                          onSelected: (value) {
+                            setState(() {
+                              value
+                                  ? selectedIntolerances.add(option)
+                                  : selectedIntolerances.remove(option);
+                            });
+                          },
+                        );
+                      }).toList(),
                     ),
+                    if (_intoleranceError != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 5),
+                        child: Text(_intoleranceError!, style: const TextStyle(color: Colors.red)),
+                      ),
+                    const SizedBox(height: 20),
+
+                    _buildLabel("Preferred Cuisines"),
                     Wrap(
                       spacing: 8,
                       children: cuisineOptions.map((option) {
@@ -257,8 +187,6 @@ class _SurveyForm extends State<SurveyForm> {
                         return FilterChip(
                           label: Text(option),
                           selected: selected,
-                          backgroundColor: Colors.white,
-                          padding: const EdgeInsets.all(10),
                           selectedColor: Colors.green,
                           checkmarkColor: Colors.white,
                           onSelected: (value) {
@@ -266,99 +194,48 @@ class _SurveyForm extends State<SurveyForm> {
                               value
                                   ? selectedCuisines.add(option)
                                   : selectedCuisines.remove(option);
-                              _cuisineError = selectedCuisines.isEmpty
-                                  ? "Please select at least one cuisine."
-                                  : null;
                             });
                           },
                         );
                       }).toList(),
                     ),
-                    if (_cuisineError != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 5),
-                        child: Text(
-                          _cuisineError!,
-                          style: const TextStyle(color: errorColor),
-                        ),
-                      ),
                     const SizedBox(height: 20),
 
                     _buildLabel("Weekly grocery spending (\$)"),
-                    TextField(
-                      controller: _spendingController,
-                      focusNode: _spendingFocus,
-                      keyboardType: TextInputType.number,
-                      decoration: _inputDecoration("e.g. 150"),
-                    ),
-                    if (_spendingError != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 5),
-                        child: Text(
-                          _spendingError!,
-                          style: const TextStyle(color: errorColor),
-                        ),
-                      ),
+                    _buildTextField(_spendingController, "e.g. 150"),
                     const SizedBox(height: 20),
 
-                    _buildLabel("How regularly do you get groceries?"),
+                    _buildLabel("Shopping Frequency"),
                     DropdownButtonFormField<String>(
-                      decoration: _inputDecoration("Select frequency"),
-                      dropdownColor: Colors.white,
-                      style: const TextStyle(color: Colors.black87),
                       value: _shoppingFrequency,
+                      decoration: _inputDecoration("Select frequency"),
                       items: [
                         'Every day',
                         '2-3 times a week',
                         'Once a week',
                         'Bi-weekly',
                         'Monthly',
-                      ]
-                          .map(
-                            (freq) => DropdownMenuItem(
-                              value: freq,
-                              child: Text(freq),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) => setState(() {
-                        _shoppingFrequency = value;
-                        _frequencyError =
-                            (_shoppingFrequency == null ||
-                                    _shoppingFrequency!.isEmpty)
-                                ? "Please select shopping frequency."
-                                : null;
-                      }),
+                      ].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                      onChanged: (value) {
+                        setState(() => _shoppingFrequency = value);
+                      },
                     ),
-                    if (_frequencyError != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 5),
-                        child: Text(
-                          _frequencyError!,
-                          style: const TextStyle(color: errorColor),
-                        ),
-                      ),
                   ],
                 ),
               ),
             ),
 
+            // Submit Button
             Container(
-              color: Colors.white,
               padding: const EdgeInsets.all(16),
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
                   minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
                 ),
                 onPressed: _handleSubmit,
-                child: Text(
-                  _isEditMode ? "Update" : "Submit",
-                  style: const TextStyle(fontSize: 18, color: Colors.white),
-                ),
+                child: Text(_isEditMode ? "Update" : "Submit",
+                    style: const TextStyle(color: Colors.white, fontSize: 18)),
               ),
             ),
           ],
@@ -367,192 +244,77 @@ class _SurveyForm extends State<SurveyForm> {
     );
   }
 
-  void _handleSubmit() {
-    setState(() {
-      _adultError = _kidsError = _familyError = _dietError = _cuisineError =
-          _spendingError = _frequencyError = null;
-      bool hasError = false;
+  // Validate + save
+  void _handleSubmit() async {
+    if (_adultController.text.isEmpty ||
+        _kidsController.text.isEmpty ||
+        _familyCountController.text.isEmpty ||
+        selectedDietary.isEmpty ||
+        selectedCuisines.isEmpty ||
+        _spendingController.text.isEmpty ||
+        _shoppingFrequency == null) {
 
-      if (_adultController.text.trim().isEmpty) {
-        _adultError = "Please enter number of adults.";
-        hasError = true;
-      }
-      if (_kidsController.text.trim().isEmpty) {
-        _kidsError = "Please enter number of kids.";
-        hasError = true;
-      }
-      if (_familyCountController.text.trim().isEmpty) {
-        _familyError = "Please enter family count.";
-        hasError = true;
-      }
-      if (selectedDietary.isEmpty) {
-        _dietError = "Please select at least one dietary restriction.";
-        hasError = true;
-      }
-      if (selectedCuisines.isEmpty) {
-        _cuisineError = "Please select at least one cuisine.";
-        hasError = true;
-      }
-      if (_spendingController.text.trim().isEmpty) {
-        _spendingError = "Please enter weekly spending.";
-        hasError = true;
-      }
-      if (_shoppingFrequency == null || _shoppingFrequency!.isEmpty) {
-        _frequencyError = "Please select shopping frequency.";
-        hasError = true;
-      }
-
-      if (!hasError) {
-      submitSurveyToFirestore().then((_) {
-        if (!_isEditMode) {
-          Navigator.pop(
-            context,
-            MaterialPageRoute(builder: (_) => InventoryTab()),
-          );
-        }else{
-          Navigator.pop(context);
-        }
+      setState(() {
+        _dietError = selectedDietary.isEmpty ? "Please select at least one diet." : null;
+        _intoleranceError = null; // optional
       });
+      return;
     }
-  });
-}
+
+    await submitSurveyToFirestore();
+    Navigator.pop(context);
+  }
 
   Future<void> submitSurveyToFirestore() async {
     if (user == null) return;
 
-    final surveyData = {
-      'adults': _adultController.text.trim(),
-      'kids': _kidsController.text.trim(),
-      'familyCount': _familyCountController.text.trim(),
-      'dietaryRestrictions': selectedDietary,
-      'preferredCuisines': selectedCuisines,
-      'weeklySpending': _spendingController.text.trim(),
-      'shoppingFrequency': _shoppingFrequency,
-      'submittedAt': FieldValue.serverTimestamp(),
+    final data = {
+      "adults": _adultController.text.trim(),
+      "kids": _kidsController.text.trim(),
+      "familyCount": _familyCountController.text.trim(),
+      "dietaryRestrictions": selectedDietary,
+      "intolerances": selectedIntolerances,
+      "preferredCuisines": selectedCuisines,
+      "weeklySpending": _spendingController.text.trim(),
+      "shoppingFrequency": _shoppingFrequency,
     };
 
-    await FirebaseFirestore.instance.collection('users').doc(user!.uid).set({
-      'profile': {'survey': surveyData},
+    await FirebaseFirestore.instance.collection("users").doc(user!.uid).set({
+      "profile": {"survey": data}
     }, SetOptions(merge: true));
+
+    print("🔥 Survey Updated: $data");
   }
 
   Future<void> _loadSurveyData() async {
-    if (user == null) {
-      setState(() => _isLoading = false);
-      return;
-    }
-
     final doc = await FirebaseFirestore.instance
-        .collection('users')
+        .collection("users")
         .doc(user!.uid)
         .get();
 
-    if (!doc.exists) {
-      setState(() => _isLoading = false);
-      return;
-    }
-
-    final data = doc.data();
-    final survey = data?['profile']?['survey'];
-
+    final survey = doc.data()?["profile"]?["survey"];
     if (survey != null) {
-      _adultController.text = survey['adults'] ?? '';
-      _kidsController.text = survey['kids'] ?? '';
-      _familyCountController.text = survey['familyCount'] ?? '';
-      _spendingController.text = survey['weeklySpending'] ?? '';
-
-      selectedDietary = List<String>.from(survey['dietaryRestrictions'] ?? []);
-      selectedCuisines = List<String>.from(survey['preferredCuisines'] ?? []);
-
-      _shoppingFrequency = survey['shoppingFrequency'] ?? '';
-
+      selectedDietary = List<String>.from(survey["dietaryRestrictions"] ?? []);
+      selectedIntolerances = List<String>.from(survey["intolerances"] ?? []);
+      selectedCuisines = List<String>.from(survey["preferredCuisines"] ?? []);
+      _shoppingFrequency = survey["shoppingFrequency"];
+      _adultController.text = survey["adults"] ?? "";
+      _kidsController.text = survey["kids"] ?? "";
+      _familyCountController.text = survey["familyCount"] ?? "";
+      _spendingController.text = survey["weeklySpending"] ?? "";
       _isEditMode = true;
     }
 
     setState(() => _isLoading = false);
   }
 
-  Text _buildLabel(String text) => Text(
-        text,
-        style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          color: Colors.black87,
-        ),
-      );
+  // UI Helpers
+  Text _buildLabel(String text) =>
+      Text(text, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold));
 
-  Widget _buildLabelWithAdd(String text, VoidCallback onAdd) => Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            text,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.add, color: Colors.green),
-            onPressed: onAdd,
-          ),
-        ],
-      );
+  Widget _buildTextField(TextEditingController c, String hint) =>
+      TextField(controller: c, decoration: _inputDecoration(hint));
 
-  InputDecoration _inputDecoration(String hint) => InputDecoration(
-        hintText: hint,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      );
-
-  void _showAddDialog({
-    required String title,
-    required Function(String) onAdd,
-  }) {
-    final TextEditingController controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        title: Text(
-          title,
-          style: const TextStyle(
-            color: Colors.green,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: TextField(
-          controller: controller,
-          style: const TextStyle(color: Colors.black87),
-          decoration: const InputDecoration(
-            hintText: "Enter value",
-            hintStyle: TextStyle(color: Colors.grey),
-            enabledBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: Colors.green),
-            ),
-            focusedBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: Colors.green, width: 2),
-            ),
-          ),
-          cursorColor: Colors.green,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel", style: TextStyle(color: Colors.green)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            onPressed: () {
-              if (controller.text.trim().isNotEmpty) {
-                onAdd(controller.text.trim());
-                Navigator.pop(context);
-              }
-            },
-            child: const Text("Add", style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
+  InputDecoration _inputDecoration(String hint) =>
+      InputDecoration(border: OutlineInputBorder(), hintText: hint);
 }
