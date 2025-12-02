@@ -23,8 +23,9 @@ class _AccountPageState extends State<AccountPage> {
   bool _isLoading = true;
   String? profileName;
   String? profilePhotoBase64;
-  bool notificationsEnabled = true; // default ON
+  bool notificationsEnabled = true;
 
+  final Color appGreen = Colors.green.shade600;
 
   @override
   void initState() {
@@ -54,7 +55,6 @@ class _AccountPageState extends State<AccountPage> {
           if (settings != null && settings["notificationsEnabled"] != null) {
             notificationsEnabled = settings["notificationsEnabled"];
           }
-
         }
       } catch (e) {
         print("Error loading profile: $e");
@@ -63,17 +63,14 @@ class _AccountPageState extends State<AccountPage> {
 
     setState(() => _isLoading = false);
   }
-  /// ⭐ NEW → Save toggle to Firestore
+
   Future<void> _updateNotificationSetting(bool value) async {
     if (user == null) return;
 
-    await FirebaseFirestore.instance
-        .collection("users")
-        .doc(user!.uid)
-        .set({
+    await FirebaseFirestore.instance.collection("users").doc(user!.uid).set({
       "profile": {
-        "settings": {"notificationsEnabled": value}
-      }
+        "settings": {"notificationsEnabled": value},
+      },
     }, SetOptions(merge: true));
   }
 
@@ -82,7 +79,7 @@ class _AccountPageState extends State<AccountPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final green = Colors.green.shade600;
+    final green = appGreen;
 
     ImageProvider? profileImage;
     if (profilePhotoBase64 != null &&
@@ -99,6 +96,7 @@ class _AccountPageState extends State<AccountPage> {
       backgroundColor: const Color(0xFFF7F8F7),
       appBar: AppBar(
         backgroundColor: green,
+        automaticallyImplyLeading: false,
         elevation: 0,
         centerTitle: true,
         title: const Text(
@@ -109,213 +107,217 @@ class _AccountPageState extends State<AccountPage> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-        child: Column(
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(
-                vertical: 24,
-                horizontal: 20,
-              ),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [green, Colors.green.shade300],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(24),
-                  bottomRight: Radius.circular(24),
-                ),
-              ),
               child: Column(
                 children: [
-                  Stack(
-                    alignment: Alignment.bottomRight,
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 24,
+                      horizontal: 20,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [green, green.withOpacity(0.75)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: const BorderRadius.only(
+                        bottomLeft: Radius.circular(24),
+                        bottomRight: Radius.circular(24),
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Stack(
+                          alignment: Alignment.bottomRight,
+                          children: [
+                            Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 3,
+                                ),
+                              ),
+                              child: CircleAvatar(
+                                radius: 45,
+                                backgroundColor: Colors.white,
+                                backgroundImage: profileImage,
+                                child: profileImage == null
+                                    ? const Icon(
+                                        Icons.person,
+                                        size: 50,
+                                        color: Colors.grey,
+                                      )
+                                    : null,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          profileName ?? user?.displayName ?? "Guest User",
+                          style: theme.textTheme.titleMedium?.copyWith(
                             color: Colors.white,
-                            width: 3,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                        child: CircleAvatar(
-                          radius: 45,
-                          backgroundColor: Colors.white,
-                          backgroundImage: profileImage,
-                          child: profileImage == null
-                              ? const Icon(
-                            Icons.person,
-                            size: 50,
-                            color: Colors.grey,
-                          )
-                              : null,
+                        Text(
+                          user?.email ?? "No email available",
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: Colors.white70,
+                          ),
                         ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(
+                      children: [
+                        _QuickActionButton(
+                          icon: Icons.edit_note_rounded,
+                          label: "Edit Profile",
+                          green: green,
+                          onTap: () async {
+                            final updated = await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const EditProfilePage(),
+                              ),
+                            );
+
+                            if (updated == true) {
+                              _refreshUser();
+                            }
+                          },
+                        ),
+                        const SizedBox(width: 12),
+                        _QuickActionButton(
+                          icon: Icons.list_alt_rounded,
+                          label: "Change Preference",
+                          green: green,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const SurveyForm(),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: WasteImpactSummaryCard(
+                      onOpenDetails: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const WasteDashboardPage(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  _SettingsCard(
+                    title: "Settings",
+                    items: [
+                      SwitchListTile(
+                        secondary: Icon(
+                          Icons.notifications_active,
+                          color: green,
+                        ),
+                        title: const Text(
+                          "Notifications",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                          ),
+                        ),
+                        value: notificationsEnabled,
+                        onChanged: (value) {
+                          setState(() => notificationsEnabled = value);
+                          _updateNotificationSetting(value);
+                        },
+                      ),
+                      _SettingsItem(
+                        icon: Icons.lock_outline,
+                        label: "Privacy",
+                        green: green,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ChangePasswordPage(),
+                            ),
+                          );
+                        },
+                      ),
+                      _SettingsItem(
+                        icon: Icons.help_outline,
+                        label: "Help & Support",
+                        green: green,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const HelpSupportPage(),
+                            ),
+                          );
+                        },
+                      ),
+                      _SettingsItem(
+                        icon: Icons.info_outline,
+                        label: "About App",
+                        green: green,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const AboutAppPage(),
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  Text(
-                    profileName ?? user?.displayName ?? "Guest User",
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    user?.email ?? "No email available",
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: Colors.white70,
+
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        await FirebaseAuth.instance.signOut();
+                        if (context.mounted) {
+                          Navigator.pushReplacementNamed(context, '/login');
+                        }
+                      },
+                      icon: const Icon(Icons.logout_rounded),
+                      label: const Text("Log Out"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size.fromHeight(48),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-
-            const SizedBox(height: 20),
-
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  _QuickActionButton(
-                    icon: Icons.edit_note_rounded,
-                    label: "Edit Profile",
-                    onTap: () async {
-                      final updated = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const EditProfilePage(),
-                        ),
-                      );
-
-                      if (updated == true) {
-                        _refreshUser();
-                      }
-                    },
-                  ),
-                  const SizedBox(width: 12),
-                  _QuickActionButton(
-                    icon: Icons.list_alt_rounded,
-                    label: "Change Preference",
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const SurveyForm(),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // 🔹 Waste impact summary (Last 7 days)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: WasteImpactSummaryCard(
-                onOpenDetails: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const WasteDashboardPage(),
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            const SizedBox(height: 20),
-            // =======================================================
-            // ⭐ SETTINGS CARD (with Notification toggle)
-            // =======================================================
-            _SettingsCard(
-              title: "Settings",
-              items: [
-                // ⭐ NEW → toggle switch
-                SwitchListTile(
-                  secondary: Icon(Icons.notifications_active,
-                      color: Colors.green.shade600),
-                  title: const Text(
-                    "Notifications",
-                    style: TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 15),
-                  ),
-                  value: notificationsEnabled,
-                  onChanged: (value) {
-                    setState(() => notificationsEnabled = value);
-                    _updateNotificationSetting(value);
-                  },
-                ),
-                _SettingsItem(
-                  icon: Icons.lock_outline,
-                  label: "Privacy",
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const ChangePasswordPage(),
-                      ),
-                    );
-                  },
-                ),
-                _SettingsItem(
-                  icon: Icons.help_outline,
-                  label: "Help & Support",
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const HelpSupportPage(),
-                      ),
-                    );
-                  },
-                ),
-                _SettingsItem(
-                  icon: Icons.info_outline,
-                  label: "About App",
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const AboutAppPage(),
-                      ),
-                    );
-                  },
-                ),
-
-              ],
-            ),
-
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
-              child: ElevatedButton.icon(
-                onPressed: () async {
-                  await FirebaseAuth.instance.signOut();
-                  if (context.mounted) {
-                    Navigator.pushReplacementNamed(context, '/login');
-                  }
-                },
-                icon: const Icon(Icons.logout_rounded),
-                label: const Text("Log Out"),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.redAccent,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size.fromHeight(48),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
 
       bottomNavigationBar: BottomNavBar(
         currentIndex: _currentIndex,
@@ -333,11 +335,13 @@ class _AccountPageState extends State<AccountPage> {
 class _QuickActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
+  final Color green;
   final VoidCallback onTap;
 
   const _QuickActionButton({
     required this.icon,
     required this.label,
+    required this.green,
     required this.onTap,
   });
 
@@ -361,7 +365,7 @@ class _QuickActionButton extends StatelessWidget {
           ),
           child: Column(
             children: [
-              Icon(icon, color: Colors.green.shade700, size: 24),
+              Icon(icon, color: green, size: 24),
               const SizedBox(height: 6),
               Text(
                 label,
@@ -381,7 +385,6 @@ class _QuickActionButton extends StatelessWidget {
 class _SettingsCard extends StatelessWidget {
   final String title;
   final List<Widget> items;
-
 
   const _SettingsCard({required this.title, required this.items});
 
@@ -429,14 +432,20 @@ class _SettingsCard extends StatelessWidget {
 class _SettingsItem extends StatelessWidget {
   final IconData icon;
   final String label;
+  final Color green;
   final VoidCallback? onTap;
 
-  const _SettingsItem({required this.icon, required this.label, this.onTap});
+  const _SettingsItem({
+    required this.icon,
+    required this.label,
+    required this.green,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Icon(icon, color: Colors.green.shade600),
+      leading: Icon(icon, color: green),
       title: Text(
         label,
         style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),

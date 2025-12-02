@@ -96,6 +96,7 @@ flutter:
   #   - images/a_dot_ham.jpeg
   assets:
     - assets/images/diet.png
+    - lib/assets/Peely.png
     - assets/keys.env
     - lib/waste_dashboard/data/impact_factors/impact_factors.csv
 

@@ -10,6 +10,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../services/inventory_service.dart';
 import '../../../widgets/bottom_nav_bar.dart';
 import '../receipe/recipe_detail_page.dart';
+import '/features/chatbot/chat_page.dart';
 
 class InventoryTab extends StatefulWidget {
   const InventoryTab({super.key});
@@ -440,19 +441,39 @@ class _InventoryTabState extends State<InventoryTab> {
               SizedBox(height: width * 0.05),
 
               // SEARCH BAR
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: width * 0.04, vertical: width * 0.03),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(25),
-                  boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 6)],
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.search, color: Colors.grey),
-                    SizedBox(width: 10),
-                    Expanded(child: Text("Ask my AI", style: TextStyle(color: Colors.grey))),
-                  ],
+InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ChatPage(), 
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: width * 0.04,
+                    vertical: width * 0.03,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(25),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black12, blurRadius: 6),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.search, color: Colors.grey),
+                      SizedBox(width: width * 0.02),
+                      const Expanded(
+                        child: Text(
+                          "Ask my AI",
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
 
