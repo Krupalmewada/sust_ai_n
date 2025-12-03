@@ -14,7 +14,6 @@ class SurveyForm extends StatefulWidget {
 class _SurveyForm extends State<SurveyForm> {
   final _adultController = TextEditingController();
   final _kidsController = TextEditingController();
-  final _familyCountController = TextEditingController();
   final _spendingController = TextEditingController();
 
   String? _shoppingFrequency;
@@ -69,7 +68,6 @@ class _SurveyForm extends State<SurveyForm> {
 
   String? _adultError;
   String? _kidsError;
-  String? _familyError;
   String? _dietError;
   String? _cuisineError;
   String? _intoleranceError;
@@ -115,14 +113,10 @@ class _SurveyForm extends State<SurveyForm> {
                     ),
                     const SizedBox(height: 20),
 
-                    _buildLabel("Family Count"),
-                    _buildTextField(_familyCountController, "Enter number"),
-                    const SizedBox(height: 20),
-
                     // ======================
                     // 🍽 SPOONACULAR DIETS
                     // ======================
-                    _buildLabel("Dietary Restrictions (Spoonacular Approved)"),
+                    _buildLabel("Dietary Restrictions"),
                     Wrap(
                       spacing: 8,
                       children: dietaryOptions.map((option) {
@@ -248,7 +242,6 @@ class _SurveyForm extends State<SurveyForm> {
   void _handleSubmit() async {
     if (_adultController.text.isEmpty ||
         _kidsController.text.isEmpty ||
-        _familyCountController.text.isEmpty ||
         selectedDietary.isEmpty ||
         selectedCuisines.isEmpty ||
         _spendingController.text.isEmpty ||
@@ -256,7 +249,6 @@ class _SurveyForm extends State<SurveyForm> {
 
       setState(() {
         _dietError = selectedDietary.isEmpty ? "Please select at least one diet." : null;
-        _intoleranceError = null; // optional
       });
       return;
     }
@@ -271,7 +263,6 @@ class _SurveyForm extends State<SurveyForm> {
     final data = {
       "adults": _adultController.text.trim(),
       "kids": _kidsController.text.trim(),
-      "familyCount": _familyCountController.text.trim(),
       "dietaryRestrictions": selectedDietary,
       "intolerances": selectedIntolerances,
       "preferredCuisines": selectedCuisines,
@@ -300,7 +291,6 @@ class _SurveyForm extends State<SurveyForm> {
       _shoppingFrequency = survey["shoppingFrequency"];
       _adultController.text = survey["adults"] ?? "";
       _kidsController.text = survey["kids"] ?? "";
-      _familyCountController.text = survey["familyCount"] ?? "";
       _spendingController.text = survey["weeklySpending"] ?? "";
       _isEditMode = true;
     }
