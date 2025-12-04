@@ -397,7 +397,7 @@ class _WasteDashboardPageState extends State<WasteDashboardPage> {
     required String leafKey,
     String? category,
   }) {
-    // 1️⃣ If full key exists (e.g. "veg.tomato", "pantry.sugar")
+    // 1️. If full key exists (e.g. "veg.tomato", "pantry.sugar")
     if (key != null && key.trim().isNotEmpty) {
       return _normKey(key);
     }
@@ -405,16 +405,16 @@ class _WasteDashboardPageState extends State<WasteDashboardPage> {
     // Normalize the leaf (e.g. "tomato", "chocolate")
     final leaf = _normKey(leafKey);
 
-    // 2️⃣ If category exists from DB (aisle/category saved earlier)
+    // 2️. If category exists from DB (aisle/category saved earlier)
     if (category != null && category.trim().isNotEmpty) {
       final cat = _normKey(category);
       return '$cat.$leaf';
     }
 
-    // 3️⃣ ✨ AUTO-GUESS category if none provided
+    // 3️. AUTO-GUESS category if none provided
     final autoCat = _guessCategoryFromLeaf(leaf);
 
-    // 4️⃣ Final canonical key returned
+    // 4️. Final canonical key returned
     return '$autoCat.$leaf';
   }
   static String _guessCategoryFromLeaf(String leaf) {
