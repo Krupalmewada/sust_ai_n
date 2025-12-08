@@ -7,6 +7,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../../services/grocery_service.dart';
 import '../../../services/inventory_service.dart';
 import '../../../widgets/bottom_nav_bar.dart';
 import '../receipe/recipe_detail_page.dart';
@@ -41,7 +42,7 @@ class _InventoryTabState extends State<InventoryTab> {
   Map<String, int> _categoryCounts = {};
   List<Map<String, dynamic>> _recipes = [];
   List<Map<String, dynamic>> _lastPurchased = [];
-
+  final GroceryService _groceryService = GroceryService();
   final Map<String, Color> _categoryColorMap = {};
 
   @override
@@ -59,6 +60,72 @@ class _InventoryTabState extends State<InventoryTab> {
     _listenToLastPurchased();
     _listenToLikedRecipes();
     _listenToSavedRecipes();
+  }
+
+  void _showIngredientStatusDialog(
+      BuildContext context,
+      List<String> have,
+      List<String> missing,
+      ) {
+    showDialog(
+      context: context,
+      builder: (_) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text("Ingredient Check",
+              style: TextStyle(fontWeight: FontWeight.bold)),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (have.isNotEmpty)
+                  const Text("✔ You already have:",
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                ...have.map((i) => Padding(
+                  padding: const EdgeInsets.only(left: 6, top: 4),
+                  child:
+                  Text("• $i", style: const TextStyle(color: Colors.green)),
+                )),
+
+                const SizedBox(height: 16),
+
+                if (missing.isNotEmpty)
+                  const Text("❌ Missing ingredients:",
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                ...missing.map((i) => Padding(
+                  padding: const EdgeInsets.only(left: 6, top: 4),
+                  child:
+                  Text("• $i", style: const TextStyle(color: Colors.red)),
+                )),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Close"),
+            ),
+
+            if (missing.isNotEmpty)
+              ElevatedButton(
+                onPressed: () async {
+                  for (final m in missing) {
+                    await _groceryService.addCategorizedItem(m, "1");
+                  }
+
+                  Navigator.pop(context);
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text("Missing ingredients added to grocery!")),
+                  );
+                },
+                child: const Text("Add to Grocery"),
+              ),
+          ],
+        );
+      },
+    );
   }
 
 
@@ -740,16 +807,37 @@ InkWell(
                                               ),
                                             );
 
-                                            if (info.statusCode == 200) {
-                                              final data = json.decode(info.body);
+                                            if (info.statusCode != 200) return;
 
-                                              if (isSaved) {
-                                                await _inventoryService.unsaveRecipe(id);
-                                              } else {
-                                                await _inventoryService.saveRecipe(data);
-                                              }
+                                            final data = json.decode(info.body);
+
+                                            // ----- UNSAVE -----
+                                            if (isSaved) {
+                                              await _inventoryService.unsaveRecipe(id);
+                                              return;
                                             }
+
+                                            // ----- SAVE -----
+                                            await _inventoryService.saveRecipe(data);
+
+                                            // ----- Extract ingredient names -----
+                                            final List ext = data["extendedIngredients"] ?? [];
+                                            final List<String> ingredientNames =
+                                            ext.map<String>((e) => e["name"].toString()).toList();
+
+                                            // ----- Check have/missing -----
+                                            final status =
+                                            await _inventoryService.getIngredientStatus(ingredientNames);
+
+                                            final have = List<String>.from(status["have"] ?? []);
+                                            final missing = List<String>.from(status["missing"] ?? []);
+
+                                            if (!mounted) return;
+
+                                            // ----- Show popup -----
+                                            _showIngredientStatusDialog(context, have, missing);
                                           },
+
                                           child: Container(
                                             padding: const EdgeInsets.all(6),
                                             decoration: BoxDecoration(
@@ -815,6 +903,7 @@ InkWell(
     );
   }
 }
+
 
 // ---------------------------------------------------------
 // CATEGORY TILE WIDGET

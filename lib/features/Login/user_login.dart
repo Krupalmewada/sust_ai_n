@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:sust_ai_n/features/home/inventory/inventory_tab.dart';
+import 'CreateAccount.dart';
 import 'survey_form.dart';
 
 User? user;
@@ -253,12 +254,38 @@ class _UserLoginState extends State<UserLogin> {
                     ),
 
               const SizedBox(height: 20),
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: double.infinity,
+                child: TextButton(
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    backgroundColor: Colors.green.withOpacity(0.1),
+                    foregroundColor: Colors.green,
+                  ),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const CreateAccount()),
+                    );
+                  },
+                  child: const Text(
+                    "Don't have an account? Create one",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
               const Text(
                 'By continuing, you agree to our Terms of Service\nand Privacy Policy.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey, fontSize: 12),
               ),
               const SizedBox(height: 20),
+
             ],
           ),
         ),

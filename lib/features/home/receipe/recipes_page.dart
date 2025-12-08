@@ -164,7 +164,9 @@ class RecipesPageState extends State<RecipesPage> with RouteAware {
         )?["amount"];
 
         final ingredientsList = (nutrition?["ingredients"] ?? [])
-            .map((e) => (e["name"] ?? "").toString())
+            .map((e) => {
+          "name": (e["name"] ?? "").toString(),
+        })
             .toList();
 
         finalRecipes.add({
@@ -173,8 +175,9 @@ class RecipesPageState extends State<RecipesPage> with RouteAware {
           "image": r["image"],
           "servings": r["servings"],
           "calories": calories,
-          "extendedIngredients": ingredientsList,
+          "extendedIngredients": ingredientsList,  // ✅ back to List<Map<String,dynamic>>
         });
+
       }
 
       if (!mounted) return;

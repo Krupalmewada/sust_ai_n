@@ -34,6 +34,7 @@ class InventoryTabSelector extends StatelessWidget {
                     decoration: isSelected
                         ? TextDecoration.underline
                         : TextDecoration.none,
+                    decorationThickness: 0,
                   ),
                 ),
                 if (isSelected)
