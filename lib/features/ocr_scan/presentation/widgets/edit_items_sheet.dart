@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 
 /// Simple data model for the editor.
-/// If you already defined EditableItem elsewhere, delete this one and import yours.
 class EditableItem {
   String name;
   double qty;

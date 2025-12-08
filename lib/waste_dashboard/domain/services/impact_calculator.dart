@@ -125,7 +125,7 @@ class ImpactCalculator {
 
   /// Calculates "Missed Savings" for EXPIRED items (CO2 only by default).
   ///
-  /// We keep this separate so your UI can frame it positively:
+  /// We keep this separate so UI can frame it positively:
   /// "Cooking these would have saved X kg CO₂".
   ImpactTotals calcMissed({
     required List<ExpiredItem> expired,
