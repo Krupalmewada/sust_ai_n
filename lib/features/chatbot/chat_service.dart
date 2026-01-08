@@ -7,7 +7,7 @@ class ChatService {
   // ✅ OpenAI API endpoint
   static const apiUri = 'https://api.openai.com/v1/chat/completions';
 
-  // ⚠️ Replace this with your actual key from https://platform.openai.com
+
   static const chatBotApiKey = 'chatBotApiKey';
 
   Future<String> chatGPTAPI(String prompt) async {
